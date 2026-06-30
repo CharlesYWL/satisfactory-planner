@@ -1,39 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { gameData } from '../../lib';
 import { usePlanner, usePlannerDerived } from '../../store/plannerStore';
 import { formatRate } from '../nodes';
+import ItemPickerDialog from './ItemPickerDialog';
 import RecipePicker from './RecipePicker';
-
-/** 全部「可生产」物品（有配方且非原矿），按名称排序——作为目标产品候选。 */
-const PRODUCIBLE_ITEMS = Object.keys(gameData.producers)
-  .filter((id) => (gameData.producers[id]?.length ?? 0) > 0 && !gameData.items[id]?.isRaw)
-  .map((id) => ({ id, name: gameData.items[id]?.name ?? id }))
-  .sort((a, b) => a.name.localeCompare(b.name));
 
 /** 产出 Tab：选目标产品 + 模式切换 + 产量/min（反向）+ 替代配方选择。 */
 export default function OutputTab() {
   const targetItemId = usePlanner((s) => s.targetItemId);
-  const setTargetItemId = usePlanner((s) => s.setTargetItemId);
   const mode = usePlanner((s) => s.mode);
   const setMode = usePlanner((s) => s.setMode);
   const targetRate = usePlanner((s) => s.targetRate);
   const setTargetRate = usePlanner((s) => s.setTargetRate);
   const derived = usePlannerDerived();
 
-  const [query, setQuery] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const options = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = q
-      ? PRODUCIBLE_ITEMS.filter((it) => it.name.toLowerCase().includes(q) || it.id.toLowerCase().includes(q))
-      : PRODUCIBLE_ITEMS;
-    // 始终保证当前选中项在列表里（即便被搜索过滤掉）。
-    if (!list.some((it) => it.id === targetItemId)) {
-      const cur = PRODUCIBLE_ITEMS.find((it) => it.id === targetItemId);
-      if (cur) return [cur, ...list];
-    }
-    return list;
-  }, [query, targetItemId]);
+  const targetItem = gameData.items[targetItemId];
+  const targetName = targetItem?.name ?? targetItemId;
 
   return (
     <div className="panel__tab">
@@ -62,26 +46,27 @@ export default function OutputTab() {
 
       <section className="panel__section">
         <h3 className="panel__section-title">目标产品</h3>
-        <input
-          className="panel__input"
-          type="text"
-          placeholder="搜索物品…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select
-          className="panel__select panel__select--list"
-          size={8}
-          value={targetItemId}
-          onChange={(e) => setTargetItemId(e.target.value)}
+        <button
+          type="button"
+          className="item-trigger"
+          onClick={() => setPickerOpen(true)}
+          title="点击选择目标产品"
         >
-          {options.map((it) => (
-            <option key={it.id} value={it.id}>
-              {it.name}
-            </option>
-          ))}
-        </select>
-        <p className="panel__hint">{options.length} 个可生产物品</p>
+          <span className="item-trigger__icon">
+            {targetItem?.image ? (
+              <img src={targetItem.image} alt="" />
+            ) : (
+              <span className="item-trigger__icon-fallback" aria-hidden="true">
+                {targetName.charAt(0)}
+              </span>
+            )}
+          </span>
+          <span className="item-trigger__name">{targetName}</span>
+          <span className="item-trigger__chevron" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+        <p className="panel__hint">点击从图片网格中选择目标产品。</p>
       </section>
 
       <section className="panel__section">
@@ -116,6 +101,8 @@ export default function OutputTab() {
         <p className="panel__hint">仅列出当前产线相关的候选配方（★ = 替代）。换配方后图与原料随之更新。</p>
         <RecipePicker />
       </section>
+
+      {pickerOpen ? <ItemPickerDialog onClose={() => setPickerOpen(false)} /> : null}
     </div>
   );
 }
