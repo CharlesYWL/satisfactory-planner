@@ -58,3 +58,17 @@ export type {
   ReverseResult,
   ReverseMachineSummary,
 } from './reverse';
+export {
+  SPLITTER_FANOUT,
+  MERGER_FANIN,
+  MAX_BELT_SPEED,
+  splittersForOutputs,
+  mergersForInputs,
+  connectionLogistics,
+  computeLogistics,
+} from './logistics';
+export type {
+  LogisticsConnection,
+  LogisticsSummary,
+  BeltUsage,
+} from './logistics';

@@ -3,22 +3,50 @@ import { MarkerType, type Edge } from '@xyflow/react';
 import type {
   ForwardResult,
   GameData,
+  LogisticsConnection,
+  LogisticsSummary,
   ReverseResult,
   TraceNode,
 } from '../lib';
-import { gameData as defaultData, BELTS, machineCapacity, suggestBelt } from '../lib';
+import {
+  gameData as defaultData,
+  BELTS,
+  computeLogistics,
+  machineCapacity,
+  suggestBelt,
+} from '../lib';
 import { itemName as itemLabel, buildingName as buildingLabel, recipeName as recipeLabel, type Lang } from '../i18n';
 import type { FlowEdgeData } from './edges';
 import {
   formatRate,
   type AppFlowNode,
   type DetailLevel,
+  type LogisticsFlowNode,
   type MachineFlowNode,
   type ResourceFlowNode,
 } from './nodes';
 
 /** 单条传送带的最高吞吐（最高档带速）；超过即需多条带 / 更高档。 */
 const MAX_BELT_SPEED = BELTS[BELTS.length - 1].speed;
+
+/**
+ * 传送带等级配色（冷→暖，对应流量从低到高）。
+ * 参照 ref5（B站UP主）的「带级分色 + 图例」：低级冷色、高级暖色，
+ * 一眼看出哪段是带宽压力大（红=最高档/瓶颈风险）。
+ */
+export const BELT_COLORS: Record<string, string> = {
+  Mk1: '#9aa0a6',
+  Mk2: '#4caf50',
+  Mk3: '#42a5f5',
+  Mk4: '#ffd54f',
+  Mk5: '#ff9800',
+  Mk6: '#e5484d',
+};
+
+/** 取某带级的配色（未知档位回退灰）。 */
+export function beltColor(mark: string): string {
+  return BELT_COLORS[mark] ?? '#9aa0a6';
+}
 
 /**
  * 图层归一化结果：把 M1 的两种结果（正向 ForwardResult / 反向 ReverseResult）
@@ -157,11 +185,25 @@ const SIZES = {
   product: { width: 250, height: 124 },
   machine: { width: 224, height: 104 },
   resource: { width: 176, height: 72 },
+  logistics: { width: 104, height: 60 },
 } as const;
 
 function sizeOf(node: AppFlowNode): { width: number; height: number } {
   if (node.type === 'resource') return SIZES.resource;
+  if (node.type === 'logistics') return SIZES.logistics;
   return node.data.variant === 'product' ? SIZES.product : SIZES.machine;
+}
+
+/** makeEdge 选项：详细物流配色 / 拆边的节点重定向 / 箭头开关。 */
+interface MakeEdgeOptions {
+  /** 详细物流：边按带级配色，徽章配色。 */
+  logistics?: boolean;
+  /** 该连接的物流估算（带级 / 分合数量，详细物流下用）。 */
+  conn?: LogisticsConnection;
+  /** 目标节点 id（默认 = targetItemId；拆边时指向物流节点）。 */
+  targetNodeId?: string;
+  /** 是否渲染箭头 marker（拆成两段时，前段不带箭头）。 */
+  withMarker?: boolean;
 }
 
 function makeEdge(
@@ -170,11 +212,18 @@ function makeEdge(
   rate: number,
   data: GameData,
   lang: Lang,
+  options: MakeEdgeOptions = {},
 ): Edge {
+  const { logistics = false, conn, targetNodeId, withMarker = true } = options;
   const item = data.items[sourceItemId];
-  const color = visibleColor(item?.color || FALLBACK_COLOR);
-  const belt = suggestBelt(rate);
-  const overBelt = rate > MAX_BELT_SPEED + 1e-6;
+  const belt = conn?.belt ?? suggestBelt(rate);
+  const overBelt = conn ? conn.overBelt : rate > MAX_BELT_SPEED + 1e-6;
+  const beltCount = conn ? conn.beltCount : overBelt ? Math.ceil(rate / MAX_BELT_SPEED) : 1;
+  // 详细物流：边描边按带级配色；否则按物品主题色（提亮保证可见）。
+  const tierColor = beltColor(belt.mark);
+  const color = logistics ? tierColor : visibleColor(item?.color || FALLBACK_COLOR);
+  const target = targetNodeId ?? nodeId(targetItemId);
+
   const edgeData: FlowEdgeData = {
     itemName: itemLabel(sourceItemId, lang, data),
     itemImage: item?.image ?? '',
@@ -183,16 +232,38 @@ function makeEdge(
     rateText: `${formatRate(rate)}/min`,
     beltMark: belt.mark,
     overBelt,
-    beltCount: overBelt ? Math.ceil(rate / MAX_BELT_SPEED) : 1,
+    beltCount,
+    logistics,
+    beltColor: tierColor,
   };
   return {
-    id: `${sourceItemId}->${targetItemId}`,
+    id: `${nodeId(sourceItemId)}->${target}`,
     source: nodeId(sourceItemId),
-    target: nodeId(targetItemId),
+    target,
     type: 'flow',
     animated: true,
     data: edgeData,
-    style: { stroke: color, strokeWidth: 2.5 },
+    style: { stroke: color, strokeWidth: logistics ? 3 : 2.5 },
+    markerEnd: withMarker
+      ? { type: MarkerType.ArrowClosed, color, width: 18, height: 18 }
+      : undefined,
+  };
+}
+
+/** 物流节点 → 目标机器的「主干」连接段：只按带级描边 + 箭头，无标签。 */
+function beltConnectorEdge(
+  sourceNodeId: string,
+  targetItemId: string,
+  conn: LogisticsConnection,
+): Edge {
+  const color = beltColor(conn.belt.mark);
+  return {
+    id: `${sourceNodeId}->${nodeId(targetItemId)}`,
+    source: sourceNodeId,
+    target: nodeId(targetItemId),
+    type: 'default',
+    animated: true,
+    style: { stroke: color, strokeWidth: 3 },
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
   };
 }
@@ -211,12 +282,23 @@ export function buildFlow(
   data: GameData = defaultData,
   detail: DetailLevel = 'detailed',
   lang: Lang = 'en',
-): { nodes: AppFlowNode[]; edges: Edge[] } {
+  logistics = false,
+): { nodes: AppFlowNode[]; edges: Edge[]; logisticsSummary: LogisticsSummary | null } {
   const nodes: AppFlowNode[] = [];
   const edges: Edge[] = [];
   const summaryByItem = new Map(result.machines.map((m) => [m.itemId, m]));
   const resourceRate = new Map<string, number>();
   const visited = new Set<string>();
+
+  // 详细物流：按整数台数算每条连接的带级 + 分离器/合并器估算，键 = source->target。
+  const machineCountOf = (itemId: string) =>
+    summaryByItem.get(itemId)?.machineCountInteger ?? 0;
+  const logisticsSummary = logistics
+    ? computeLogistics(result.tree, machineCountOf, data)
+    : null;
+  const connByEdge = new Map<string, LogisticsConnection>(
+    logisticsSummary?.connections.map((c) => [`${c.itemId}->${c.targetItemId}`, c]) ?? [],
+  );
 
   const walk = (node: TraceNode) => {
     if (visited.has(node.itemId)) return;
@@ -269,7 +351,43 @@ export function buildFlow(
     nodes.push(machineNode);
 
     for (const input of node.inputs) {
-      edges.push(makeEdge(input.itemId, node.itemId, input.rate, data, lang));
+      const conn = connByEdge.get(`${input.itemId}->${node.itemId}`);
+      // 详细物流且该段确有分离器/合并器 → 在源与目标之间插入物流节点。
+      if (logistics && conn && conn.splitters + conn.mergers > 0) {
+        const logiId = `logi:${input.itemId}->${node.itemId}`;
+        const tierColor = beltColor(conn.belt.mark);
+        const logiNode: LogisticsFlowNode = {
+          id: logiId,
+          type: 'logistics',
+          position: { x: 0, y: 0 },
+          data: {
+            itemName: itemLabel(input.itemId, lang, data),
+            flowText: `${formatRate(conn.flow)}/min`,
+            beltMark: conn.belt.mark,
+            beltColor: tierColor,
+            splitters: conn.splitters,
+            mergers: conn.mergers,
+            overBelt: conn.overBelt,
+            beltCount: conn.beltCount,
+          },
+        };
+        nodes.push(logiNode);
+        // 前段：源 → 物流节点（带物料标签 + 带级配色，不带箭头）。
+        edges.push(
+          makeEdge(input.itemId, node.itemId, input.rate, data, lang, {
+            logistics: true,
+            conn,
+            targetNodeId: logiId,
+            withMarker: false,
+          }),
+        );
+        // 后段：物流节点 → 目标（带级配色 + 箭头，无标签）。
+        edges.push(beltConnectorEdge(logiId, node.itemId, conn));
+      } else {
+        edges.push(
+          makeEdge(input.itemId, node.itemId, input.rate, data, lang, { logistics, conn }),
+        );
+      }
       if (input.kind !== 'produced') {
         resourceRate.set(input.itemId, (resourceRate.get(input.itemId) ?? 0) + input.rate);
       }
@@ -297,7 +415,7 @@ export function buildFlow(
     nodes.push(resourceNode);
   }
 
-  return { nodes, edges };
+  return { nodes, edges, logisticsSummary };
 }
 
 /**

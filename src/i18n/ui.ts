@@ -58,6 +58,10 @@ export const resources = {
         detailSimple: '简单',
         detailDetailed: '详细',
         detailHint: '简单模式隐藏建筑名与利用率 / 功耗小字；详细模式全显。',
+        logisticsTitle: '详细物流',
+        logisticsToggle: '显示分离器/合并器 + 带级配色',
+        logisticsHint:
+          '开 → 机器间插入分离器(分)/合并器(合)节点，边按传送带等级上色（图例见左上）；关 → 回到简洁视图。',
         overclockTitle: '超频',
         overclockToggle: '启用超频凑整',
         overclockMax: '最大超频倍率 {{x}}x',
@@ -109,6 +113,10 @@ export const resources = {
         legendRaw: '原料',
         legendMachine: '加工',
         legendProduct: '成品',
+        beltLegend: '传送带等级',
+        logisticsTitle: '物流汇总',
+        beltUsage: '各带级用量',
+        beltSegments: '段',
       },
       node: {
         machines: '台',
@@ -123,6 +131,14 @@ export const resources = {
       edge: {
         suggestBelt: '建议带速 {{mark}}',
         overBelt: '超过单条 {{mark}} 上限，需 {{count}} 条 {{mark}} 或更高带速',
+      },
+      logistics: {
+        splitter: '分离器',
+        merger: '合并器',
+        splitterGlyph: '分',
+        mergerGlyph: '合',
+        tipSplitters: '分离器 ×{{count}}',
+        tipMergers: '合并器 ×{{count}}',
       },
     },
   },
@@ -183,6 +199,10 @@ export const resources = {
         detailDetailed: 'Detailed',
         detailHint:
           'Simple hides building names and the utilization / power fine print; detailed shows all.',
+        logisticsTitle: 'Detailed logistics',
+        logisticsToggle: 'Show splitters / mergers + belt-tier colors',
+        logisticsHint:
+          'On → insert splitter (S) / merger (M) nodes between machines and color edges by belt tier (legend top-left); off → simple view.',
         overclockTitle: 'Overclock',
         overclockToggle: 'Pack with overclock',
         overclockMax: 'Max overclock {{x}}x',
@@ -235,6 +255,10 @@ export const resources = {
         legendRaw: 'Raw',
         legendMachine: 'Machine',
         legendProduct: 'Product',
+        beltLegend: 'Belt tiers',
+        logisticsTitle: 'Logistics',
+        beltUsage: 'Belt usage',
+        beltSegments: 'seg',
       },
       node: {
         machines: '',
@@ -249,6 +273,14 @@ export const resources = {
       edge: {
         suggestBelt: 'Suggested belt {{mark}}',
         overBelt: 'Over a single {{mark}} belt — needs {{count}}× {{mark}} or a faster belt',
+      },
+      logistics: {
+        splitter: 'Splitter',
+        merger: 'Merger',
+        splitterGlyph: 'S',
+        mergerGlyph: 'M',
+        tipSplitters: 'Splitters ×{{count}}',
+        tipMergers: 'Mergers ×{{count}}',
       },
     },
   },

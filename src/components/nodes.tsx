@@ -57,7 +57,28 @@ export type ResourceNodeData = {
 
 export type MachineFlowNode = Node<MachineNodeData, 'machine'>;
 export type ResourceFlowNode = Node<ResourceNodeData, 'resource'>;
-export type AppFlowNode = MachineFlowNode | ResourceFlowNode;
+export type LogisticsFlowNode = Node<LogisticsNodeData, 'logistics'>;
+export type AppFlowNode = MachineFlowNode | ResourceFlowNode | LogisticsFlowNode;
+
+/** 一个「物流节点」的数据：边上插入的分离器/合并器估算（详细物流视图）。 */
+export type LogisticsNodeData = {
+  /** 流动的物品名（tooltip / 标签）。 */
+  itemName: string;
+  /** 该段流量文本，如 "160/min"。 */
+  flowText: string;
+  /** 建议带级 mark。 */
+  beltMark: string;
+  /** 带级配色（边/徽章同色）。 */
+  beltColor: string;
+  /** 分离器数量。 */
+  splitters: number;
+  /** 合并器数量。 */
+  mergers: number;
+  /** 是否超单条最高档带速（需并行多带）。 */
+  overBelt: boolean;
+  /** 超带速时的并行带条数。 */
+  beltCount: number;
+};
 
 /** 速率显示：整数原样，否则最多两位小数并去掉尾随 0。 */
 export function formatRate(value: number): string {
@@ -148,8 +169,47 @@ function ResourceNodeImpl({ data }: NodeProps<ResourceFlowNode>) {
 export const MachineNode = memo(MachineNodeImpl);
 export const ResourceNode = memo(ResourceNodeImpl);
 
+function LogisticsNodeImpl({ data }: NodeProps<LogisticsFlowNode>) {
+  const { t } = useTranslation();
+  const tip = [
+    `${data.itemName} · ${data.flowText} · ${data.beltMark}`,
+    data.splitters > 0 ? t('logistics.tipSplitters', { count: data.splitters }) : '',
+    data.mergers > 0 ? t('logistics.tipMergers', { count: data.mergers }) : '',
+    data.overBelt ? t('edge.overBelt', { mark: data.beltMark, count: data.beltCount }) : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return (
+    <div
+      className="sf-logi"
+      title={tip}
+      style={{ borderColor: data.beltColor, ['--sf-belt-color' as string]: data.beltColor }}
+    >
+      <Handle type="target" position={Position.Left} />
+      <span className="sf-logi__belt">{data.beltMark}</span>
+      <div className="sf-logi__counts">
+        {data.mergers > 0 ? (
+          <span className="sf-logi__chip sf-logi__chip--merge" title={t('logistics.merger')}>
+            {t('logistics.mergerGlyph')}×{data.mergers}
+          </span>
+        ) : null}
+        {data.splitters > 0 ? (
+          <span className="sf-logi__chip sf-logi__chip--split" title={t('logistics.splitter')}>
+            {t('logistics.splitterGlyph')}×{data.splitters}
+          </span>
+        ) : null}
+      </div>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+export const LogisticsNode = memo(LogisticsNodeImpl);
+
 /** 注册给 React Flow 的自定义节点类型表。 */
 export const nodeTypes: NodeTypes = {
   machine: MachineNode,
   resource: ResourceNode,
+  logistics: LogisticsNode,
 };
