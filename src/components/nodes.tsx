@@ -27,6 +27,18 @@ export type MachineNodeData = {
   power: number;
   /** 末台 / 实际利用率 0~1。 */
   utilization: number;
+  /** 是否为瓶颈节点（直接消耗瓶颈原料；仅正向，红高亮 + 角标）。 */
+  isBottleneck: boolean;
+  /** 是否欠料（正向且利用率 < 100% 且非瓶颈，黄警示）。 */
+  starved: boolean;
+  /** 配方 id。 */
+  recipeId: string;
+  /** 配方名（tooltip 用）。 */
+  recipeName: string;
+  /** 配方单周期时长/秒（tooltip 用）。 */
+  recipeDuration: number;
+  /** 当前超频下的单机产能/min（tooltip 用）。 */
+  singleCapacity: number;
   /** 详略级别：simple 隐藏建筑名与利用率/功耗小字。 */
   detail: DetailLevel;
 };
@@ -56,9 +68,33 @@ function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
   const isProduct = data.variant === 'product';
   const detailed = data.detail === 'detailed';
   const overclocked = Math.abs(data.clockPct - 100) > 0.5;
+  const utilPct = Math.round(data.utilization * 100);
+  const cls = [
+    'sf-node',
+    isProduct ? 'sf-node--product' : 'sf-node--machine',
+    data.isBottleneck ? 'sf-node--bottleneck' : '',
+    data.starved ? 'sf-node--starved' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  // hover tooltip（原生 title，简单可靠，不引依赖）：配方 / 时长 / 单机产能 / 利用率 / 超频 / 功耗。
+  const tip = [
+    `${data.itemName} · ${data.recipeName}`,
+    `配方时长 ${formatRate(data.recipeDuration)}s`,
+    `单机产能 ${formatRate(data.singleCapacity)}/min`,
+    `利用率 ${utilPct}%`,
+    `超频 ${Math.round(data.clockPct)}%`,
+    `功耗 ${Math.round(data.power)}MW（${data.machineCountInteger} 台）`,
+  ].join('\n');
+
   return (
-    <div className={`sf-node ${isProduct ? 'sf-node--product' : 'sf-node--machine'}`}>
+    <div className={cls} title={tip}>
       <Handle type="target" position={Position.Left} />
+      {data.isBottleneck ? <span className="sf-node__flag sf-node__flag--bottleneck">瓶颈</span> : null}
+      {data.starved ? (
+        <span className="sf-node__flag sf-node__flag--starved">{utilPct}%</span>
+      ) : null}
       <div className="sf-node__icon">
         {data.machineImage ? <img src={data.machineImage} alt={data.machineName} /> : null}
       </div>
@@ -74,7 +110,7 @@ function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
         </div>
         {detailed ? (
           <div className="sf-node__sub">
-            建造 {data.machineCountInteger} 台 · 利用率 {Math.round(data.utilization * 100)}% ·{' '}
+            建造 {data.machineCountInteger} 台 · 利用率 {utilPct}% ·{' '}
             {Math.round(data.power)}MW
           </div>
         ) : null}

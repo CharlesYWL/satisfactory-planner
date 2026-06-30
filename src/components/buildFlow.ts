@@ -6,7 +6,8 @@ import type {
   ReverseResult,
   TraceNode,
 } from '../lib';
-import { gameData as defaultData } from '../lib';
+import { gameData as defaultData, BELTS, machineCapacity, suggestBelt } from '../lib';
+import type { FlowEdgeData } from './edges';
 import {
   formatRate,
   type AppFlowNode,
@@ -14,6 +15,9 @@ import {
   type MachineFlowNode,
   type ResourceFlowNode,
 } from './nodes';
+
+/** 单条传送带的最高吞吐（最高档带速）；超过即需多条带 / 更高档。 */
+const MAX_BELT_SPEED = BELTS[BELTS.length - 1].speed;
 
 /**
  * 图层归一化结果：把 M1 的两种结果（正向 ForwardResult / 反向 ReverseResult）
@@ -35,11 +39,15 @@ export interface GraphMachine {
   utilization: number;
   /** 功耗/MW。 */
   power: number;
+  /** 该级是否直接消耗瓶颈原料（仅正向有意义；反向恒 false）。 */
+  isBottleneck: boolean;
 }
 
 /** FlowGraph 渲染所需的归一化产线结果。 */
 export interface GraphResult {
   itemId: string;
+  /** 配平取向：瓶颈/欠料高亮仅在 forward 下生效。 */
+  mode: 'forward' | 'reverse';
   /** HUD 标题用的产出速率/min（反向=目标产量；正向=实际产量）。 */
   targetRate: number;
   /** 生产树（用于连边与节点展开）。 */
@@ -66,9 +74,11 @@ export function reverseToGraph(result: ReverseResult): GraphResult {
     clockPct: 100,
     utilization: m.machineCountInteger > 0 ? m.machineCount / m.machineCountInteger : 1,
     power: m.power,
+    isBottleneck: false,
   }));
   return {
     itemId: result.itemId,
+    mode: 'reverse',
     targetRate: result.targetRate,
     tree: result.tree,
     rawTotals: result.rawTotals,
@@ -96,6 +106,7 @@ export function forwardToGraph(
     clockPct: n.clockPct,
     utilization: n.utilization,
     power: n.power,
+    isBottleneck: n.isBottleneck,
   }));
   const buildingTotals: Record<string, number> = {};
   for (const n of result.nodes) {
@@ -103,6 +114,7 @@ export function forwardToGraph(
   }
   return {
     itemId: result.itemId,
+    mode: 'forward',
     targetRate: result.targetOutput,
     tree,
     rawTotals: result.rawInputs,
@@ -159,19 +171,26 @@ function makeEdge(
 ): Edge {
   const item = data.items[sourceItemId];
   const color = visibleColor(item?.color || FALLBACK_COLOR);
+  const belt = suggestBelt(rate);
+  const overBelt = rate > MAX_BELT_SPEED + 1e-6;
+  const edgeData: FlowEdgeData = {
+    itemName: item?.name ?? sourceItemId,
+    itemImage: item?.image ?? '',
+    color,
+    rate,
+    rateText: `${formatRate(rate)}/min`,
+    beltMark: belt.mark,
+    overBelt,
+    beltCount: overBelt ? Math.ceil(rate / MAX_BELT_SPEED) : 1,
+  };
   return {
     id: `${sourceItemId}->${targetItemId}`,
     source: nodeId(sourceItemId),
     target: nodeId(targetItemId),
-    type: 'smoothstep',
+    type: 'flow',
     animated: true,
-    label: `${item?.name ?? sourceItemId}  ${formatRate(rate)}/min`,
+    data: edgeData,
     style: { stroke: color, strokeWidth: 2.5 },
-    labelStyle: { fill: '#f1f3f5', fontSize: 11, fontWeight: 600 },
-    labelShowBg: true,
-    labelBgStyle: { fill: '#15171b', fillOpacity: 0.88 },
-    labelBgPadding: [6, 3],
-    labelBgBorderRadius: 4,
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
   };
 }
@@ -207,6 +226,17 @@ export function buildFlow(
     const machineCountInteger = summary?.machineCountInteger ?? Math.ceil(machineCount - 1e-9);
     const isTarget = node.itemId === result.itemId;
 
+    const clockPct = summary?.clockPct ?? 100;
+    const utilization =
+      summary?.utilization ??
+      (machineCountInteger > 0 ? machineCount / machineCountInteger : 1);
+    const recipe = data.recipes[summary?.recipeId ?? node.recipeId];
+    const singleCapacity = recipe ? machineCapacity(recipe, clockPct / 100) : 0;
+    // 瓶颈/欠料高亮仅在正向取向生效；反向只是凑整后的小数利用率，不视为欠料。
+    const isBottleneck = result.mode === 'forward' && (summary?.isBottleneck ?? false);
+    const starved =
+      result.mode === 'forward' && !isBottleneck && utilization < 0.999;
+
     const machineNode: MachineFlowNode = {
       id: nodeId(node.itemId),
       type: 'machine',
@@ -221,11 +251,15 @@ export function buildFlow(
         rate: summary?.rate ?? node.rate,
         machineCount,
         machineCountInteger,
-        clockPct: summary?.clockPct ?? 100,
+        clockPct,
         power: summary?.power ?? 0,
-        utilization:
-          summary?.utilization ??
-          (machineCountInteger > 0 ? machineCount / machineCountInteger : 1),
+        utilization,
+        isBottleneck,
+        starved,
+        recipeId: recipe?.id ?? node.recipeId,
+        recipeName: recipe?.name ?? node.recipeId,
+        recipeDuration: recipe?.duration ?? 0,
+        singleCapacity,
         detail,
       },
     };

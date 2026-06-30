@@ -15,6 +15,7 @@ import '@xyflow/react/dist/style.css';
 import type { GameData } from '../lib';
 import { gameData as defaultData } from '../lib';
 import { buildFlow, layoutFlow, type GraphResult } from './buildFlow';
+import { edgeTypes } from './edges';
 import { formatRate, nodeTypes, type AppFlowNode, type DetailLevel } from './nodes';
 
 export interface FlowGraphProps {
@@ -56,11 +57,18 @@ export default function FlowGraph({
   }, [layouted, setNodes, setEdges]);
 
   const buildingRows = useMemo(
-    () =>
-      Object.entries(result.buildingTotals)
-        .map(([id, count]) => ({ name: data.buildings[id]?.name ?? id, count }))
-        .sort((a, b) => b.count - a.count),
-    [result.buildingTotals, data],
+    () => {
+      const map = new Map<string, { name: string; count: number; power: number }>();
+      for (const m of result.machines) {
+        const name = data.buildings[m.machineId]?.name ?? m.machineId;
+        const cur = map.get(m.machineId) ?? { name, count: 0, power: 0 };
+        cur.count += m.machineCountInteger;
+        cur.power += m.power;
+        map.set(m.machineId, cur);
+      }
+      return [...map.values()].sort((a, b) => b.power - a.power);
+    },
+    [result.machines, data],
   );
 
   const rawRows = useMemo(
@@ -80,6 +88,7 @@ export default function FlowGraph({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       fitView
       fitViewOptions={{ padding: 0.18 }}
       minZoom={0.15}
@@ -117,22 +126,26 @@ export default function FlowGraph({
           <div className="sf-hud__power-value">
             {Math.round(result.totalPower)} <small>MW</small>
           </div>
-          <div className="sf-hud__divider" />
-          <div className="sf-hud__label">建筑</div>
-          {buildingRows.map((b) => (
-            <div className="sf-hud__row" key={b.name}>
-              <span>{b.name}</span>
-              <span>×{b.count}</span>
-            </div>
-          ))}
-          <div className="sf-hud__divider" />
-          <div className="sf-hud__label">原矿需求</div>
-          {rawRows.map((r) => (
-            <div className="sf-hud__row" key={r.name}>
-              <span>{r.name}</span>
-              <span>{formatRate(r.rate)}/min</span>
-            </div>
-          ))}
+          <details className="sf-hud__group" open>
+            <summary className="sf-hud__label sf-hud__summary">机器功耗（按类型）</summary>
+            {buildingRows.map((b) => (
+              <div className="sf-hud__row" key={b.name}>
+                <span>
+                  {b.name} <small>×{b.count}</small>
+                </span>
+                <span>{Math.round(b.power)}MW</span>
+              </div>
+            ))}
+          </details>
+          <details className="sf-hud__group">
+            <summary className="sf-hud__label sf-hud__summary">原矿需求</summary>
+            {rawRows.map((r) => (
+              <div className="sf-hud__row" key={r.name}>
+                <span>{r.name}</span>
+                <span>{formatRate(r.rate)}/min</span>
+              </div>
+            ))}
+          </details>
         </div>
       </Panel>
     </ReactFlow>
