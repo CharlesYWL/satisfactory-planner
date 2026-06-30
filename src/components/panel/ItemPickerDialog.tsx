@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { gameData } from '../../lib';
+import { itemName, useLang } from '../../i18n';
 import { usePlanner } from '../../store/plannerStore';
 
 /** 弹窗里展示的一个候选物品（仅取网格需要的字段）。 */
 interface PickItem {
   id: string;
+  /** 英文名（用于搜索回退）。 */
   name: string;
   image: string;
   category: string;
@@ -27,38 +30,13 @@ const CATEGORY_ORDER: string[] = (() => {
   return seen;
 })();
 
-/** 分类中文名（面板整体为中文，未登记的分类回退为原始 key）。 */
-const CATEGORY_LABELS: Record<string, string> = {
-  ore: '矿石',
-  ingot: '锭',
-  mineral: '矿物',
-  animal: '动物制品',
-  liquid: '液体',
-  gas: '气体',
-  standard: '标准件',
-  industrial: '工业件',
-  electronic: '电子件',
-  communication: '通讯件',
-  quantum: '量子科技',
-  container: '容器/包装',
-  fuel: '燃料',
-  consumed: '消耗品',
-  ammo: '弹药',
-  nuclear: '核能',
-  waste: '废料',
-  special: '特殊物品',
-  statue: '雕像',
-  ficsmas: 'FICSMAS',
-};
-
 interface ItemGroup {
   category: string;
-  label: string;
   items: PickItem[];
 }
 
-/** 把候选物品按分类分组并按 CATEGORY_ORDER 排序，组内按名称排序。 */
-function groupByCategory(items: PickItem[]): ItemGroup[] {
+/** 把候选物品按分类分组并按 CATEGORY_ORDER 排序，组内按当前语言的显示名排序。 */
+function groupByCategory(items: PickItem[], sortName: (it: PickItem) => string): ItemGroup[] {
   const byCat = new Map<string, PickItem[]>();
   for (const it of items) {
     const arr = byCat.get(it.category);
@@ -74,8 +52,8 @@ function groupByCategory(items: PickItem[]): ItemGroup[] {
   for (const cat of order) {
     const arr = byCat.get(cat);
     if (!arr || arr.length === 0) continue;
-    arr.sort((a, b) => a.name.localeCompare(b.name));
-    groups.push({ category: cat, label: CATEGORY_LABELS[cat] ?? cat, items: arr });
+    arr.sort((a, b) => sortName(a).localeCompare(sortName(b)));
+    groups.push({ category: cat, items: arr });
   }
   return groups;
 }
@@ -83,10 +61,12 @@ function groupByCategory(items: PickItem[]): ItemGroup[] {
 /**
  * 目标产品图片网格选择弹窗（对标 satisfactory-calculator 的「可供生产的物品」弹窗）。
  *
- * 替代原下拉框：顶部搜索（按名称/ID 过滤，中英文皆可），物品按分类分组成带 header 的
+ * 替代原下拉框：顶部搜索（按显示名/英文名/ID 过滤，中英文皆可），物品按分类分组成带 header 的
  * 网格，每格大图标 + 名称（无数字）。点物品即写入 store.targetItemId 并关闭，主流程图实时重算。
  */
 export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  const lang = useLang();
   const targetItemId = usePlanner((s) => s.targetItemId);
   const setTargetItemId = usePlanner((s) => s.setTargetItemId);
   const [query, setQuery] = useState('');
@@ -103,13 +83,17 @@ export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // 搜索同时匹配英文名、中文名与 ID，无论当前界面语言。
     const filtered = q
       ? CANDIDATES.filter(
-          (it) => it.name.toLowerCase().includes(q) || it.id.toLowerCase().includes(q),
+          (it) =>
+            it.name.toLowerCase().includes(q) ||
+            it.id.toLowerCase().includes(q) ||
+            itemName(it.id, 'zh').toLowerCase().includes(q),
         )
       : CANDIDATES;
-    return groupByCategory(filtered);
-  }, [query]);
+    return groupByCategory(filtered, (it) => itemName(it.id, lang));
+  }, [query, lang]);
 
   const total = useMemo(
     () => groups.reduce((n, g) => n + g.items.length, 0),
@@ -127,12 +111,17 @@ export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
         className="item-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="选择目标产品"
+        aria-label={t('picker.title')}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="item-dialog__head">
-          <h2 className="item-dialog__title">选择目标产品</h2>
-          <button className="item-dialog__close" onClick={onClose} aria-label="关闭" type="button">
+          <h2 className="item-dialog__title">{t('picker.title')}</h2>
+          <button
+            className="item-dialog__close"
+            onClick={onClose}
+            aria-label={t('picker.close')}
+            type="button"
+          >
             ×
           </button>
         </header>
@@ -142,7 +131,7 @@ export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
             ref={inputRef}
             className="panel__input"
             type="text"
-            placeholder="搜索物品…（支持中英文）"
+            placeholder={t('picker.search')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -150,39 +139,44 @@ export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
 
         <div className="item-dialog__body">
           {groups.length === 0 ? (
-            <p className="item-dialog__empty">没有匹配的物品</p>
+            <p className="item-dialog__empty">{t('picker.empty')}</p>
           ) : (
             groups.map((g) => (
               <section className="item-group" key={g.category}>
-                <div className="item-group__head">{g.label}</div>
+                <div className="item-group__head">
+                  {t(`picker.category.${g.category}`, { defaultValue: g.category })}
+                </div>
                 <div className="item-grid">
-                  {g.items.map((it) => (
-                    <button
-                      key={it.id}
-                      type="button"
-                      className={`item-card ${it.id === targetItemId ? 'item-card--active' : ''}`}
-                      onClick={() => choose(it.id)}
-                      title={it.name}
-                    >
-                      <span className="item-card__icon">
-                        {it.image ? (
-                          <img src={it.image} alt="" loading="lazy" />
-                        ) : (
-                          <span className="item-card__icon-fallback" aria-hidden="true">
-                            {it.name.charAt(0)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="item-card__name">{it.name}</span>
-                    </button>
-                  ))}
+                  {g.items.map((it) => {
+                    const name = itemName(it.id, lang);
+                    return (
+                      <button
+                        key={it.id}
+                        type="button"
+                        className={`item-card ${it.id === targetItemId ? 'item-card--active' : ''}`}
+                        onClick={() => choose(it.id)}
+                        title={name}
+                      >
+                        <span className="item-card__icon">
+                          {it.image ? (
+                            <img src={it.image} alt="" loading="lazy" />
+                          ) : (
+                            <span className="item-card__icon-fallback" aria-hidden="true">
+                              {name.charAt(0)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="item-card__name">{name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
             ))
           )}
         </div>
 
-        <footer className="item-dialog__foot">{total} 个可选物品</footer>
+        <footer className="item-dialog__foot">{t('picker.count', { count: total })}</footer>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { gameData } from './lib';
 import FlowGraph from './components/FlowGraph';
 import SidePanel from './components/panel/SidePanel';
@@ -10,6 +11,7 @@ import { usePlanner, usePlannerDerived } from './store/plannerStore';
  * → FlowGraph 实时重渲染。算法层（src/lib）与 M2 渲染层（FlowGraph）保持复用、不改写。
  */
 export default function App() {
+  const { t } = useTranslation();
   const mode = usePlanner((s) => s.mode);
   const targetItemId = usePlanner((s) => s.targetItemId);
   const direction = usePlanner((s) => s.direction);
@@ -26,7 +28,7 @@ export default function App() {
         <h1 className="app__title">
           Better <span>Satisfactory</span> Planner
         </h1>
-        <span className="app__subtitle">M4 · 打磨</span>
+        <span className="app__subtitle">{t('app.subtitle')}</span>
       </header>
 
       <div className="app__split">

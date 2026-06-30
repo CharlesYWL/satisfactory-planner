@@ -1,4 +1,6 @@
+import { useTranslation } from 'react-i18next';
 import { chooseRecipe, gameData } from '../../lib';
+import { itemName, recipeName, useLang } from '../../i18n';
 import { usePlanner, useRelevantRecipes } from '../../store/plannerStore';
 
 /**
@@ -9,6 +11,8 @@ import { usePlanner, useRelevantRecipes } from '../../store/plannerStore';
  * 触发 getRelevantRecipes + 重算 → 图与原料随之刷新（换配方可能改变原料结构）。
  */
 export default function RecipePicker() {
+  const { t } = useTranslation();
+  const lang = useLang();
   const relevant = useRelevantRecipes();
   const recipeOverrides = usePlanner((s) => s.recipeOverrides);
   const setRecipeOverride = usePlanner((s) => s.setRecipeOverride);
@@ -17,7 +21,7 @@ export default function RecipePicker() {
   const items = relevant.items.filter((id) => (relevant.byItem[id]?.length ?? 0) > 0);
 
   if (items.length === 0) {
-    return <p className="panel__hint">当前产线没有可替换配方的中间产物。</p>;
+    return <p className="panel__hint">{t('recipe.none')}</p>;
   }
 
   return (
@@ -25,13 +29,12 @@ export default function RecipePicker() {
       {items.map((itemId) => {
         const candidates = relevant.byItem[itemId] ?? [];
         const current = chooseRecipe(itemId, recipeOverrides, gameData);
-        const itemName = gameData.items[itemId]?.name ?? itemId;
         const baseId = chooseRecipe(itemId, {}, gameData)?.id;
         const single = candidates.length <= 1;
 
         return (
           <label className="recipe-picker__row" key={itemId}>
-            <span className="recipe-picker__item">{itemName}</span>
+            <span className="recipe-picker__item">{itemName(itemId, lang)}</span>
             <select
               className="panel__select"
               value={current?.id ?? ''}
@@ -44,11 +47,10 @@ export default function RecipePicker() {
             >
               {candidates.map((recipeId) => {
                 const recipe = gameData.recipes[recipeId];
-                const label = recipe?.name ?? recipeId;
                 return (
                   <option key={recipeId} value={recipeId}>
                     {recipe?.isAlternate ? '★ ' : ''}
-                    {label}
+                    {recipeName(recipeId, lang)}
                   </option>
                 );
               })}

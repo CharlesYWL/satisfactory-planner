@@ -1,8 +1,12 @@
+import { useTranslation } from 'react-i18next';
 import { MAX_CLOCK, MIN_CLOCK } from '../../lib';
+import { setLang, useLang } from '../../i18n';
 import { usePlanner } from '../../store/plannerStore';
 
-/** 选项 Tab：图表方向、信息详略、超频开关 + maxClock。 */
+/** 选项 Tab：语言、图表方向、信息详略、超频开关 + maxClock。 */
 export default function OptionsTab() {
+  const { t } = useTranslation();
+  const lang = useLang();
   const mode = usePlanner((s) => s.mode);
   const direction = usePlanner((s) => s.direction);
   const setDirection = usePlanner((s) => s.setDirection);
@@ -16,58 +20,74 @@ export default function OptionsTab() {
   return (
     <div className="panel__tab">
       <section className="panel__section">
-        <h3 className="panel__section-title">图表方向</h3>
+        <h3 className="panel__section-title">{t('options.languageTitle')}</h3>
+        <div className="seg">
+          <button
+            className={`seg__btn ${lang === 'zh' ? 'seg__btn--active' : ''}`}
+            onClick={() => setLang('zh')}
+          >
+            {t('options.languageZh')}
+          </button>
+          <button
+            className={`seg__btn ${lang === 'en' ? 'seg__btn--active' : ''}`}
+            onClick={() => setLang('en')}
+          >
+            {t('options.languageEn')}
+          </button>
+        </div>
+      </section>
+
+      <section className="panel__section">
+        <h3 className="panel__section-title">{t('options.directionTitle')}</h3>
         <div className="seg">
           <button
             className={`seg__btn ${direction === 'LR' ? 'seg__btn--active' : ''}`}
             onClick={() => setDirection('LR')}
           >
-            左右 LR
+            {t('options.directionLR')}
           </button>
           <button
             className={`seg__btn ${direction === 'TB' ? 'seg__btn--active' : ''}`}
             onClick={() => setDirection('TB')}
           >
-            上下 TB
+            {t('options.directionTB')}
           </button>
         </div>
       </section>
 
       <section className="panel__section">
-        <h3 className="panel__section-title">信息详略</h3>
+        <h3 className="panel__section-title">{t('options.detailTitle')}</h3>
         <div className="seg">
           <button
             className={`seg__btn ${detail === 'simple' ? 'seg__btn--active' : ''}`}
             onClick={() => setDetail('simple')}
           >
-            简单
+            {t('options.detailSimple')}
           </button>
           <button
             className={`seg__btn ${detail === 'detailed' ? 'seg__btn--active' : ''}`}
             onClick={() => setDetail('detailed')}
           >
-            详细
+            {t('options.detailDetailed')}
           </button>
         </div>
-        <p className="panel__hint">
-          简单模式隐藏建筑名与利用率 / 功耗小字；详细模式全显。
-        </p>
+        <p className="panel__hint">{t('options.detailHint')}</p>
       </section>
 
       <section className="panel__section">
-        <h3 className="panel__section-title">超频</h3>
+        <h3 className="panel__section-title">{t('options.overclockTitle')}</h3>
         <label className="switch">
           <input
             type="checkbox"
             checked={overclockEnabled}
             onChange={(e) => setOverclockEnabled(e.target.checked)}
           />
-          启用超频凑整
+          {t('options.overclockToggle')}
         </label>
         {overclockEnabled ? (
           <label className="panel__field panel__field--col">
             <span className="panel__unit">
-              最大超频倍率 {maxClock.toFixed(1)}x
+              {t('options.overclockMax', { x: maxClock.toFixed(1) })}
             </span>
             <input
               type="range"
@@ -83,9 +103,9 @@ export default function OptionsTab() {
         <p className="panel__hint">
           {overclockEnabled
             ? mode === 'forward'
-              ? '产线取向：用更少机器超频凑整（maxClock 上限可调），机器数 = ⌈需求 ÷ (单机产能 × maxClock)⌉。'
-              : '成品取向恒用小数机器数对标计算器；超频上限仅影响产线取向。'
-            : '整数模式：每级机器向上取整 + 显示利用率（产线取向）。'}
+              ? t('options.overclockHintForward')
+              : t('options.overclockHintReverse')
+            : t('options.overclockHintOff')}
         </p>
       </section>
     </div>
