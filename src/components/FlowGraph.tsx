@@ -12,15 +12,19 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { GameData, ReverseResult } from '../lib';
+import type { GameData } from '../lib';
 import { gameData as defaultData } from '../lib';
-import { buildFlow, layoutFlow } from './buildFlow';
-import { formatRate, nodeTypes, type AppFlowNode } from './nodes';
+import { buildFlow, layoutFlow, type GraphResult } from './buildFlow';
+import { formatRate, nodeTypes, type AppFlowNode, type DetailLevel } from './nodes';
 
 export interface FlowGraphProps {
-  /** 反向配平结果（balanceReverse 的输出）。 */
-  result: ReverseResult;
+  /** 归一化产线结果（正向/反向均可）。 */
+  result: GraphResult;
   data?: GameData;
+  /** 图表方向：左右(LR) / 上下(TB)。 */
+  direction?: 'LR' | 'TB';
+  /** 节点信息详略级别。 */
+  detail?: DetailLevel;
 }
 
 function miniMapColor(node: AppFlowNode): string {
@@ -32,11 +36,16 @@ function miniMapColor(node: AppFlowNode): string {
  * 把一个配平结果渲染成可拖拽 / 缩放 / 平移的生产链流程图。
  * 节点 = 加工/原料/成品，边 = 物品流向（名称 + 速率），角落显示总功耗等汇总。
  */
-export default function FlowGraph({ result, data = defaultData }: FlowGraphProps) {
+export default function FlowGraph({
+  result,
+  data = defaultData,
+  direction = 'LR',
+  detail = 'detailed',
+}: FlowGraphProps) {
   const layouted = useMemo(() => {
-    const { nodes, edges } = buildFlow(result, data);
-    return { nodes: layoutFlow(nodes, edges), edges };
-  }, [result, data]);
+    const { nodes, edges } = buildFlow(result, data, detail);
+    return { nodes: layoutFlow(nodes, edges, direction), edges };
+  }, [result, data, direction, detail]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<AppFlowNode>(layouted.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(layouted.edges);
@@ -106,7 +115,7 @@ export default function FlowGraph({ result, data = defaultData }: FlowGraphProps
         <div className="sf-hud sf-hud--power">
           <div className="sf-hud__label">总功耗</div>
           <div className="sf-hud__power-value">
-            {result.totalPower} <small>MW</small>
+            {Math.round(result.totalPower)} <small>MW</small>
           </div>
           <div className="sf-hud__divider" />
           <div className="sf-hud__label">建筑</div>
