@@ -26,7 +26,7 @@ export default function App() {
         <h1 className="app__title">
           Better <span>Satisfactory</span> Planner
         </h1>
-        <span className="app__subtitle">M3 · 交互配置面板</span>
+        <span className="app__subtitle">M4 · 打磨</span>
       </header>
 
       <div className="app__split">

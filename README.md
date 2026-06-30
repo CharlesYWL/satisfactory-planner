@@ -9,7 +9,7 @@ Multica 项目: 「Better Satisfactory Planner」(MYW-43~48)
 - [x] M1 配平算法 + 单测
 - [x] M2 流程图渲染 (React Flow)
 - [x] M3 交互三 Tab + 替代配方智能筛选 + 超频
-- [ ] M4 打磨
+- [x] M4 打磨（边图标/带速建议 · 瓶颈高亮 · 功耗分组 · tooltip）
 - [ ] M5 部署（可选）
 
 ## 数据层 (data/)
@@ -171,3 +171,23 @@ rel.byItem;   // { 物品: [候选配方...] }
 绝不糊脸列出游戏几百个配方。选某配方 → 写进 `recipeOverrides` → 重新 `getRelevantRecipes` + 重算 →
 图与原料随之更新（换配方可能改变原料结构，下拉列表也跟着变）。
 
+
+## M4 · 打磨 (`src/components/`)
+
+在 M1 算法 / M2 渲染 / M3 面板都不改写的前提下，只在**渲染 / 样式 / 数据透传层**加 5 项打磨。
+算法层（`src/lib`）与 store 对外行为不变——新增字段都是从既有 forward 结果 / `buildFlow` 透传的只读派生。
+
+- **边图标 + 速率（`src/components/edges.tsx`）**：自定义 `flow` 边（`EdgeLabelRenderer` + `getSmoothStepPath`），
+  label = 物品小图标（SCIM CDN，~17px，`onError` 隐藏 img 优雅降级为纯文字）+ 物品名 + `xx/min`，边色沿用 `item.color`。
+- **带速档位建议**：每条物料边旁标注 `suggestBelt(rate).mark`（Mk1~Mk6）小 badge；速率超过单条最高档（Mk6=1200/min）
+  时变橙色并提示 `Mk6×N ⚠`（需多条带 / 更高带速）。
+- **瓶颈 / 欠料高亮（正向限定）**：forward 结果的 `isBottleneck` 节点 → 红外框 + 「瓶颈」角标；
+  利用率 < 100% 的非瓶颈节点 → 黄外框 + 利用率角标。反向取向不受影响（小数利用率只是凑整，不视为欠料）。
+  通过给节点 data 加 `isBottleneck` / `starved` 字段 + `nodes.tsx` 切 class + `styles.css` 加样式实现。
+- **功耗汇总（`FlowGraph.tsx` HUD）**：除总功耗外，按 `buildingId` 聚合「台数 × 单机功耗」，
+  在可折叠 `<details>` 区块列出每种机器 `名称 ×台数 · 小计MW`；原矿需求同样收进可折叠区块。
+- **机器节点 tooltip**：hover 原生 `title`（不引重型依赖），显示配方名 / 配方时长(`getRecipe(id).duration`s) /
+  单机产能(`machineCapacity`)/min / 利用率% / 超频% / 功耗。`recipeName` `recipeDuration` `singleCapacity` 由 `buildFlow.ts` 透传进节点 data。
+
+> 数据透传：`GraphMachine` 加只读 `isBottleneck`，`GraphResult` 加 `mode`，`buildFlow` 据此派生
+> 节点的 `isBottleneck` / `starved` 与 tooltip 字段、边的图标 / 速率 / 建议带速——M1 单测仍 18/18 全绿。

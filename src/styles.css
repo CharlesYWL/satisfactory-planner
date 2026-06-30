@@ -7,6 +7,7 @@
   --sf-orange-soft: #ffb04a;
   --sf-green: #4caf50;
   --sf-red: #e5484d;
+  --sf-yellow: #f5c518;
   --sf-text: #e8eaed;
   --sf-text-dim: #9aa0a8;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -107,6 +108,7 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   width: 100%;
   height: 100%;
+  position: relative;
 }
 
 .sf-node--machine {
@@ -593,4 +595,126 @@ body {
 
 .boundary__toggle input {
   accent-color: var(--sf-orange);
+}
+
+/* ---- M4 polish: bottleneck / starvation highlight ---- */
+.sf-node--bottleneck {
+  border-color: var(--sf-red);
+  box-shadow: 0 0 0 2px var(--sf-red), 0 0 18px rgba(229, 72, 77, 0.55);
+}
+
+.sf-node--starved {
+  border-color: var(--sf-yellow);
+  box-shadow: 0 0 0 1px var(--sf-yellow), 0 0 14px rgba(245, 197, 24, 0.35);
+}
+
+/* product 节点本身是橙框，瓶颈时叠加红外圈以示区分 */
+.sf-node--product.sf-node--bottleneck {
+  box-shadow: 0 0 0 2px var(--sf-red), 0 0 22px rgba(255, 140, 0, 0.35);
+}
+
+.sf-node__flag {
+  position: absolute;
+  top: -9px;
+  right: -8px;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.5;
+  letter-spacing: 0.4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.sf-node__flag--bottleneck {
+  background: var(--sf-red);
+  color: #fff;
+}
+
+.sf-node__flag--starved {
+  background: var(--sf-yellow);
+  color: #1c1e22;
+}
+
+/* ---- M4 polish: edge label (icon + name + rate + belt badge) ---- */
+.sf-edge-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sf-text);
+  background: rgba(21, 23, 27, 0.92);
+  border: 1px solid var(--sf-edge-color, var(--sf-border));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.sf-edge-label__icon {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  flex: none;
+}
+
+.sf-edge-label__name {
+  color: var(--sf-edge-color, var(--sf-text));
+  font-weight: 700;
+}
+
+.sf-edge-label__rate {
+  color: var(--sf-text);
+}
+
+.sf-edge-label__belt {
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--sf-text-dim);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--sf-border);
+}
+
+.sf-edge-label__belt--over {
+  color: #1c1e22;
+  background: var(--sf-orange);
+  border-color: var(--sf-orange);
+}
+
+/* ---- M4 polish: collapsible power HUD groups ---- */
+.sf-hud__group {
+  margin-top: 8px;
+  border-top: 1px solid var(--sf-border);
+  padding-top: 8px;
+}
+
+.sf-hud__summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  margin-bottom: 6px;
+}
+
+.sf-hud__summary::-webkit-details-marker {
+  display: none;
+}
+
+.sf-hud__summary::before {
+  content: '▸ ';
+  color: var(--sf-orange);
+}
+
+.sf-hud__group[open] > .sf-hud__summary::before {
+  content: '▾ ';
+}
+
+.sf-hud__row small {
+  color: var(--sf-text-dim);
+  font-weight: 600;
 }
