@@ -43,6 +43,8 @@ export interface PlannerState {
   direction: FlowDirection;
   /** 节点信息详略。 */
   detail: DetailLevel;
+  /** 详细物流：开 → 显示分离器/合并器节点 + 边按带级配色。 */
+  logistics: boolean;
 
   setTargetItemId: (itemId: string) => void;
   setMode: (mode: PlannerMode) => void;
@@ -55,6 +57,7 @@ export interface PlannerState {
   setMaxClock: (clock: number) => void;
   setDirection: (direction: FlowDirection) => void;
   setDetail: (detail: DetailLevel) => void;
+  setLogistics: (on: boolean) => void;
 }
 
 const DEFAULT_TARGET = 'Desc_Stator_C';
@@ -81,6 +84,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   maxClock: MAX_CLOCK,
   direction: 'LR',
   detail: 'detailed',
+  logistics: false,
 
   setTargetItemId: (itemId) =>
     // 换目标 → 清空与旧产线绑定的配方覆盖；正向取向下用新产线的原矿需求重新播种供给。
@@ -132,6 +136,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   setMaxClock: (clock) => set({ maxClock: Math.min(MAX_CLOCK, Math.max(1, clock)) }),
   setDirection: (direction) => set({ direction }),
   setDetail: (detail) => set({ detail }),
+  setLogistics: (on) => set({ logistics: on }),
 }));
 
 /** 派生产线结果：归一化 graph（图渲染）+ 可选 forward（供原料 Tab 显示瓶颈）。 */

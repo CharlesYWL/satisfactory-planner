@@ -16,7 +16,7 @@ import '@xyflow/react/dist/style.css';
 import type { GameData } from '../lib';
 import { gameData as defaultData } from '../lib';
 import { buildingName, itemName, useLang } from '../i18n';
-import { buildFlow, layoutFlow, type GraphResult } from './buildFlow';
+import { buildFlow, layoutFlow, beltColor, BELT_COLORS, type GraphResult } from './buildFlow';
 import { edgeTypes } from './edges';
 import { formatRate, nodeTypes, type AppFlowNode, type DetailLevel } from './nodes';
 
@@ -28,10 +28,13 @@ export interface FlowGraphProps {
   direction?: 'LR' | 'TB';
   /** 节点信息详略级别。 */
   detail?: DetailLevel;
+  /** 详细物流：开 → 显示分离器/合并器节点 + 边按带级配色 + 带级图例。 */
+  logistics?: boolean;
 }
 
 function miniMapColor(node: AppFlowNode): string {
   if (node.type === 'resource') return '#e5484d';
+  if (node.type === 'logistics') return '#8a8f98';
   return node.data.variant === 'product' ? '#ff8c00' : '#4caf50';
 }
 
@@ -44,13 +47,14 @@ export default function FlowGraph({
   data = defaultData,
   direction = 'LR',
   detail = 'detailed',
+  logistics = false,
 }: FlowGraphProps) {
   const { t } = useTranslation();
   const lang = useLang();
   const layouted = useMemo(() => {
-    const { nodes, edges } = buildFlow(result, data, detail, lang);
-    return { nodes: layoutFlow(nodes, edges, direction), edges };
-  }, [result, data, direction, detail, lang]);
+    const { nodes, edges, logisticsSummary } = buildFlow(result, data, detail, lang, logistics);
+    return { nodes: layoutFlow(nodes, edges, direction), edges, logisticsSummary };
+  }, [result, data, direction, detail, lang, logistics]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<AppFlowNode>(layouted.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(layouted.edges);
@@ -84,6 +88,14 @@ export default function FlowGraph({
   );
 
   const targetName = itemName(result.itemId, lang, data);
+  const logisticsSummary = layouted.logisticsSummary;
+  // 带级图例固定展示全 6 档梯度（让用户学会冷→暖配色），高亮当前用到的档位。
+  const usedBeltMarks = new Set(logisticsSummary?.beltUsage.map((u) => u.mark) ?? []);
+  const beltLegend = Object.keys(BELT_COLORS).map((mark) => ({
+    mark,
+    color: beltColor(mark),
+    used: usedBeltMarks.has(mark),
+  }));
 
   return (
     <ReactFlow
@@ -124,6 +136,34 @@ export default function FlowGraph({
               {t('graph.legendProduct')}
             </div>
           </div>
+          {logistics ? (
+            <>
+              <div className="sf-hud__label" style={{ marginTop: 10 }}>
+                {t('graph.beltLegend')}
+              </div>
+              <div className="sf-legend sf-legend--belt">
+                {beltLegend.map((b) => (
+                  <div
+                    className={`sf-legend__item${b.used ? ' sf-legend__item--used' : ''}`}
+                    key={b.mark}
+                  >
+                    <span className="sf-legend__bar" style={{ background: b.color }} />
+                    {b.mark}
+                  </div>
+                ))}
+              </div>
+              <div className="sf-legend sf-legend--belt" style={{ marginTop: 6 }}>
+                <div className="sf-legend__item">
+                  <span className="sf-legend__glyph">{t('logistics.splitterGlyph')}</span>
+                  {t('logistics.splitter')}
+                </div>
+                <div className="sf-legend__item">
+                  <span className="sf-legend__glyph">{t('logistics.mergerGlyph')}</span>
+                  {t('logistics.merger')}
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
       </Panel>
 
@@ -153,6 +193,42 @@ export default function FlowGraph({
               </div>
             ))}
           </details>
+          {logistics && logisticsSummary ? (
+            <details className="sf-hud__group" open>
+              <summary className="sf-hud__label sf-hud__summary">
+                {t('graph.logisticsTitle')}
+              </summary>
+              <div className="sf-hud__row">
+                <span>
+                  {t('logistics.splitterGlyph')} {t('logistics.splitter')}
+                </span>
+                <span>×{logisticsSummary.totalSplitters}</span>
+              </div>
+              <div className="sf-hud__row">
+                <span>
+                  {t('logistics.mergerGlyph')} {t('logistics.merger')}
+                </span>
+                <span>×{logisticsSummary.totalMergers}</span>
+              </div>
+              <div className="sf-hud__divider" />
+              <div className="sf-hud__label">{t('graph.beltUsage')}</div>
+              {logisticsSummary.beltUsage.map((u) => (
+                <div className="sf-hud__row" key={u.mark}>
+                  <span>
+                    <span
+                      className="sf-legend__bar"
+                      style={{ background: beltColor(u.mark), marginRight: 6 }}
+                    />
+                    {u.mark} <small>{u.speed}/min</small>
+                  </span>
+                  <span>
+                    {u.segments} {t('graph.beltSegments')}
+                    {u.beltCount > u.segments ? ` · ${u.beltCount}×` : ''}
+                  </span>
+                </div>
+              ))}
+            </details>
+          ) : null}
         </div>
       </Panel>
     </ReactFlow>

@@ -27,6 +27,10 @@ export type FlowEdgeData = {
   overBelt: boolean;
   /** 超带速时需要的最高档带条数（≥2）。 */
   beltCount: number;
+  /** 详细物流视图：开 → 带级徽章按带级配色（与边同色）。 */
+  logistics?: boolean;
+  /** 带级配色（详细物流视图下用于徽章；边描边色走 style.stroke）。 */
+  beltColor?: string;
 };
 
 export type FlowEdge = Edge<FlowEdgeData, 'flow'>;
@@ -83,7 +87,14 @@ function FlowEdgeImpl({
             <span className="sf-edge-label__name">{d.itemName}</span>
             <span className="sf-edge-label__rate">{d.rateText}</span>
             <span
-              className={`sf-edge-label__belt${d.overBelt ? ' sf-edge-label__belt--over' : ''}`}
+              className={`sf-edge-label__belt${d.overBelt ? ' sf-edge-label__belt--over' : ''}${
+                d.logistics ? ' sf-edge-label__belt--tier' : ''
+              }`}
+              style={
+                d.logistics && d.beltColor && !d.overBelt
+                  ? { background: d.beltColor, borderColor: d.beltColor, color: '#10131a' }
+                  : undefined
+              }
               title={
                 d.overBelt
                   ? t('edge.overBelt', { mark: d.beltMark, count: d.beltCount })

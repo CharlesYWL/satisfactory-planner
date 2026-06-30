@@ -12,6 +12,8 @@ export default function OptionsTab() {
   const setDirection = usePlanner((s) => s.setDirection);
   const detail = usePlanner((s) => s.detail);
   const setDetail = usePlanner((s) => s.setDetail);
+  const logistics = usePlanner((s) => s.logistics);
+  const setLogistics = usePlanner((s) => s.setLogistics);
   const overclockEnabled = usePlanner((s) => s.overclockEnabled);
   const setOverclockEnabled = usePlanner((s) => s.setOverclockEnabled);
   const maxClock = usePlanner((s) => s.maxClock);
@@ -72,6 +74,19 @@ export default function OptionsTab() {
           </button>
         </div>
         <p className="panel__hint">{t('options.detailHint')}</p>
+      </section>
+
+      <section className="panel__section">
+        <h3 className="panel__section-title">{t('options.logisticsTitle')}</h3>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={logistics}
+            onChange={(e) => setLogistics(e.target.checked)}
+          />
+          {t('options.logisticsToggle')}
+        </label>
+        <p className="panel__hint">{t('options.logisticsHint')}</p>
       </section>
 
       <section className="panel__section">

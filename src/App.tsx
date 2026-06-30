@@ -16,11 +16,12 @@ export default function App() {
   const targetItemId = usePlanner((s) => s.targetItemId);
   const direction = usePlanner((s) => s.direction);
   const detail = usePlanner((s) => s.detail);
+  const logistics = usePlanner((s) => s.logistics);
   const derived = usePlannerDerived();
 
-  // 结构性变化（目标 / 取向 / 方向）时 remount 以重新 fitView；
+  // 结构性变化（目标 / 取向 / 方向 / 详细物流）时 remount 以重新 fitView；
   // 速率 / 配方 / 供给 / 详略变化则原地更新，平滑不抖动。
-  const graphKey = `${targetItemId}-${mode}-${direction}`;
+  const graphKey = `${targetItemId}-${mode}-${direction}-${logistics ? 'logi' : 'plain'}`;
 
   return (
     <div className="app">
@@ -39,6 +40,7 @@ export default function App() {
             data={gameData}
             direction={direction}
             detail={detail}
+            logistics={logistics}
           />
         </main>
         <SidePanel />
