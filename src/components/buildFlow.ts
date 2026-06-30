@@ -1,13 +1,116 @@
 import dagre from '@dagrejs/dagre';
 import { MarkerType, type Edge } from '@xyflow/react';
-import type { GameData, ReverseResult, TraceNode } from '../lib';
+import type {
+  ForwardResult,
+  GameData,
+  ReverseResult,
+  TraceNode,
+} from '../lib';
 import { gameData as defaultData } from '../lib';
 import {
   formatRate,
   type AppFlowNode,
+  type DetailLevel,
   type MachineFlowNode,
   type ResourceFlowNode,
 } from './nodes';
+
+/**
+ * 图层归一化结果：把 M1 的两种结果（正向 ForwardResult / 反向 ReverseResult）
+ * 统一成 FlowGraph 能直接渲染的形状。算法层（src/lib）保持纯净，不感知 UI。
+ */
+export interface GraphMachine {
+  itemId: string;
+  recipeId: string;
+  machineId: string;
+  /** 该物品产量/min。 */
+  rate: number;
+  /** 用于卡片显示的机器数（反向=小数对标原网站；正向=整数台数）。 */
+  machineCount: number;
+  /** 实际建造的整数台数。 */
+  machineCountInteger: number;
+  /** 超频百分比（整数/反向恒 100）。 */
+  clockPct: number;
+  /** 利用率 0~1。 */
+  utilization: number;
+  /** 功耗/MW。 */
+  power: number;
+}
+
+/** FlowGraph 渲染所需的归一化产线结果。 */
+export interface GraphResult {
+  itemId: string;
+  /** HUD 标题用的产出速率/min（反向=目标产量；正向=实际产量）。 */
+  targetRate: number;
+  /** 生产树（用于连边与节点展开）。 */
+  tree: TraceNode | null;
+  /** 原矿/原料需求汇总。 */
+  rawTotals: Record<string, number>;
+  /** 各自产物品的机器汇总。 */
+  machines: GraphMachine[];
+  /** 建筑 → 整数台数合计。 */
+  buildingTotals: Record<string, number>;
+  /** 总功耗/MW。 */
+  totalPower: number;
+}
+
+/** 反向配平结果 → 归一化 GraphResult（小数机器数，clock 恒 100%）。 */
+export function reverseToGraph(result: ReverseResult): GraphResult {
+  const machines: GraphMachine[] = result.machines.map((m) => ({
+    itemId: m.itemId,
+    recipeId: m.recipeId,
+    machineId: m.machineId,
+    rate: m.rate,
+    machineCount: m.machineCount,
+    machineCountInteger: m.machineCountInteger,
+    clockPct: 100,
+    utilization: m.machineCountInteger > 0 ? m.machineCount / m.machineCountInteger : 1,
+    power: m.power,
+  }));
+  return {
+    itemId: result.itemId,
+    targetRate: result.targetRate,
+    tree: result.tree,
+    rawTotals: result.rawTotals,
+    machines,
+    buildingTotals: result.buildingTotals,
+    totalPower: result.totalPower,
+  };
+}
+
+/**
+ * 正向配平结果 + 在实际产量下重跑的生产树 → 归一化 GraphResult。
+ * 机器数取正向的整数台数 / 超频百分比 / 利用率（demand÷throughput）。
+ */
+export function forwardToGraph(
+  result: ForwardResult,
+  tree: TraceNode | null,
+): GraphResult {
+  const machines: GraphMachine[] = result.nodes.map((n) => ({
+    itemId: n.itemId,
+    recipeId: n.recipeId,
+    machineId: n.machineId,
+    rate: n.demand,
+    machineCount: n.machineCount,
+    machineCountInteger: n.machineCount,
+    clockPct: n.clockPct,
+    utilization: n.utilization,
+    power: n.power,
+  }));
+  const buildingTotals: Record<string, number> = {};
+  for (const n of result.nodes) {
+    buildingTotals[n.machineId] = (buildingTotals[n.machineId] ?? 0) + n.machineCount;
+  }
+  return {
+    itemId: result.itemId,
+    targetRate: result.targetOutput,
+    tree,
+    rawTotals: result.rawInputs,
+    machines,
+    buildingTotals,
+    totalPower: result.totalPower,
+  };
+}
 
 /** React Flow 节点 id 用物品 id 直接当 key（每个物品在图里去重为一个节点）。 */
 const nodeId = (itemId: string) => itemId;
@@ -74,17 +177,18 @@ function makeEdge(
 }
 
 /**
- * 把反向配平结果（生产树）转成 React Flow 的 nodes + edges。
+ * 把归一化产线结果（生产树）转成 React Flow 的 nodes + edges。
  *
  * - 每个「自产」物品 → 一个 machine 节点（目标成品标记为 product）。
  * - 每个原料 / 已供给叶子 → 一个 resource 节点（红圈），需求量按消费方累加。
- * - 边方向：生产者 → 消费者（左→右），label = 物品名 + 速率/min，颜色取 item.color。
+ * - 边方向：生产者 → 消费者，label = 物品名 + 速率/min，颜色取 item.color。
  *
  * 同一物品在树里若出现多次（被多处消费）只生成一个节点，多条消费边各自保留。
  */
 export function buildFlow(
-  result: ReverseResult,
+  result: GraphResult,
   data: GameData = defaultData,
+  detail: DetailLevel = 'detailed',
 ): { nodes: AppFlowNode[]; edges: Edge[] } {
   const nodes: AppFlowNode[] = [];
   const edges: Edge[] = [];
@@ -117,8 +221,12 @@ export function buildFlow(
         rate: summary?.rate ?? node.rate,
         machineCount,
         machineCountInteger,
+        clockPct: summary?.clockPct ?? 100,
         power: summary?.power ?? 0,
-        utilization: machineCountInteger > 0 ? machineCount / machineCountInteger : 1,
+        utilization:
+          summary?.utilization ??
+          (machineCountInteger > 0 ? machineCount / machineCountInteger : 1),
+        detail,
       },
     };
     nodes.push(machineNode);
@@ -146,6 +254,7 @@ export function buildFlow(
         itemName: item?.name ?? itemId,
         itemImage: item?.image ?? '',
         rate,
+        detail,
       },
     };
     nodes.push(resourceNode);

@@ -1,6 +1,9 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
 
+/** 节点信息详略级别。 */
+export type DetailLevel = 'simple' | 'detailed';
+
 /** 一个「加工节点」/「成品节点」的数据。 */
 export type MachineNodeData = {
   /** machine = 中间加工，product = 终点成品（高亮大图）。 */
@@ -14,14 +17,18 @@ export type MachineNodeData = {
   machineImage: string;
   /** 该物品产量 /min。 */
   rate: number;
-  /** 100% 超频下所需机器数（小数，对标原网站）。 */
+  /** 卡片显示的机器数（反向=小数；正向=整数台数）。 */
   machineCount: number;
   /** 实际需建造的整数机器数。 */
   machineCountInteger: number;
+  /** 超频百分比（整数/反向恒 100）。 */
+  clockPct: number;
   /** 整数台机器满载功耗 /MW。 */
   power: number;
-  /** 末台利用率 0~1（machineCount / machineCountInteger）。 */
+  /** 末台 / 实际利用率 0~1。 */
   utilization: number;
+  /** 详略级别：simple 隐藏建筑名与利用率/功耗小字。 */
+  detail: DetailLevel;
 };
 
 /** 一个「原料输入节点」的数据（红圈叶子）。 */
@@ -31,6 +38,8 @@ export type ResourceNodeData = {
   itemImage: string;
   /** 全树累计需求 /min。 */
   rate: number;
+  /** 详略级别（保留以便未来扩展，simple 下不再赘述）。 */
+  detail: DetailLevel;
 };
 
 export type MachineFlowNode = Node<MachineNodeData, 'machine'>;
@@ -45,6 +54,8 @@ export function formatRate(value: number): string {
 
 function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
   const isProduct = data.variant === 'product';
+  const detailed = data.detail === 'detailed';
+  const overclocked = Math.abs(data.clockPct - 100) > 0.5;
   return (
     <div className={`sf-node ${isProduct ? 'sf-node--product' : 'sf-node--machine'}`}>
       <Handle type="target" position={Position.Left} />
@@ -53,16 +64,20 @@ function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
       </div>
       <div className="sf-node__body">
         <div className="sf-node__title">{data.itemName}</div>
-        <div className="sf-node__machine">{data.machineName}</div>
+        {detailed ? <div className="sf-node__machine">{data.machineName}</div> : null}
         {isProduct ? (
           <div className="sf-node__rate">{formatRate(data.rate)}/min</div>
         ) : null}
         <div className="sf-node__count">
           ×{data.machineCount.toFixed(2)} <small>台</small>
+          {overclocked ? <small className="sf-node__clock"> @{Math.round(data.clockPct)}%</small> : null}
         </div>
-        <div className="sf-node__sub">
-          建造 {data.machineCountInteger} 台 · 利用率 {Math.round(data.utilization * 100)}% · {data.power}MW
-        </div>
+        {detailed ? (
+          <div className="sf-node__sub">
+            建造 {data.machineCountInteger} 台 · 利用率 {Math.round(data.utilization * 100)}% ·{' '}
+            {Math.round(data.power)}MW
+          </div>
+        ) : null}
       </div>
       <Handle type="source" position={Position.Right} />
     </div>
