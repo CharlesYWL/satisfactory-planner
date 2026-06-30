@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { BELTS, gameData, suggestBelt, type ForwardInput } from '../../lib';
+import { useTranslation } from 'react-i18next';
+import { BELTS, suggestBelt, type ForwardInput } from '../../lib';
+import { itemName, useLang, type Lang } from '../../i18n';
 import {
   usePlanner,
   usePlannerDerived,
   useChainStructure,
 } from '../../store/plannerStore';
 import { formatRate } from '../nodes';
-
-const itemName = (id: string) => gameData.items[id]?.name ?? id;
 
 /** 某条供给的可调行：带速档位 60/120/270…/自定义 → 写进 store.supplies。 */
 function SupplyRow({
@@ -23,15 +23,17 @@ function SupplyRow({
   onChange: (rate: number) => void;
   onRemove?: () => void;
 }) {
+  const { t } = useTranslation();
+  const lang = useLang();
   const matchedBelt = BELTS.find((b) => Math.abs(b.speed - value) < 1e-6);
   const [custom, setCustom] = useState(!matchedBelt);
 
   return (
     <div className={`supply-row ${info?.isBottleneck ? 'supply-row--bottleneck' : ''}`}>
       <div className="supply-row__head">
-        <span className="supply-row__name">{itemName(itemId)}</span>
+        <span className="supply-row__name">{itemName(itemId, lang)}</span>
         {onRemove ? (
-          <button className="supply-row__x" title="移除" onClick={onRemove}>
+          <button className="supply-row__x" title={t('input.remove')} onClick={onRemove}>
             ×
           </button>
         ) : null}
@@ -57,7 +59,7 @@ function SupplyRow({
               {b.mark} · {b.speed}/min
             </option>
           ))}
-          <option value="custom">自定义…</option>
+          <option value="custom">{t('input.custom')}</option>
         </select>
         {custom ? (
           <input
@@ -73,8 +75,11 @@ function SupplyRow({
       </div>
       {info ? (
         <div className="supply-row__info">
-          消耗 {formatRate(info.consumed)} · 剩余 {formatRate(info.leftover)}
-          {info.isBottleneck ? ' · 瓶颈' : ''}
+          {t('input.usage', {
+            consumed: formatRate(info.consumed),
+            leftover: formatRate(info.leftover),
+          })}
+          {info.isBottleneck ? t('input.bottleneckSuffix') : ''}
         </div>
       ) : null}
     </div>
@@ -83,6 +88,8 @@ function SupplyRow({
 
 /** 原料 Tab：反向只读列出原矿需求；正向可调供给带速 + 把中间产物当作半成品边界。 */
 export default function InputTab() {
+  const { t } = useTranslation();
+  const lang = useLang();
   const mode = usePlanner((s) => s.mode);
   const supplies = usePlanner((s) => s.supplies);
   const setSupply = usePlanner((s) => s.setSupply);
@@ -91,23 +98,28 @@ export default function InputTab() {
   const derived = usePlannerDerived();
   const chain = useChainStructure();
 
+  const byName = (l: Lang) => (a: string, b: string) =>
+    itemName(a, l).localeCompare(itemName(b, l));
+
   if (mode === 'reverse') {
     const rows = Object.entries(derived.reverse?.rawTotals ?? {}).sort((a, b) => b[1] - a[1]);
     return (
       <div className="panel__tab">
         <section className="panel__section">
-          <h3 className="panel__section-title">原矿需求</h3>
-          <p className="panel__hint">成品取向下由目标产量倒推；切到产线取向可改为按带速供给。</p>
+          <h3 className="panel__section-title">{t('input.rawTitle')}</h3>
+          <p className="panel__hint">{t('input.rawHint')}</p>
           {rows.length === 0 ? (
-            <p className="panel__hint">目标本身即原料，无需上游。</p>
+            <p className="panel__hint">{t('input.rawNoUpstream')}</p>
           ) : (
             rows.map(([id, rate]) => (
               <div className="supply-row supply-row--readonly" key={id}>
                 <div className="supply-row__head">
-                  <span className="supply-row__name">{itemName(id)}</span>
+                  <span className="supply-row__name">{itemName(id, lang)}</span>
                   <span className="supply-row__rate">{formatRate(rate)}/min</span>
                 </div>
-                <div className="supply-row__info">建议带速 {suggestBelt(rate).mark}</div>
+                <div className="supply-row__info">
+                  {t('input.suggestBelt', { mark: suggestBelt(rate).mark })}
+                </div>
               </div>
             ))
           )}
@@ -118,17 +130,17 @@ export default function InputTab() {
 
   // forward 模式
   const inputByItem = new Map((derived.forward?.inputs ?? []).map((i) => [i.itemId, i]));
-  const rawIds = Object.keys(chain.rawTotals).sort((a, b) => itemName(a).localeCompare(itemName(b)));
+  const rawIds = Object.keys(chain.rawTotals).sort(byName(lang));
   const intermediates = chain.machines
     .map((m) => m.itemId)
     .filter((id) => id !== targetItemId)
-    .sort((a, b) => itemName(a).localeCompare(itemName(b)));
+    .sort(byName(lang));
 
   return (
     <div className="panel__tab">
       <section className="panel__section">
-        <h3 className="panel__section-title">原料供给</h3>
-        <p className="panel__hint">选带速或自定义速率，正向算出实际产量与瓶颈（高亮）。</p>
+        <h3 className="panel__section-title">{t('input.supplyTitle')}</h3>
+        <p className="panel__hint">{t('input.supplyHint')}</p>
         {rawIds.map((id) => (
           <SupplyRow
             key={id}
@@ -141,10 +153,10 @@ export default function InputTab() {
       </section>
 
       <section className="panel__section">
-        <h3 className="panel__section-title">已有半成品</h3>
-        <p className="panel__hint">勾选后把该中间产物当作输入边界——算法展开到它就停。</p>
+        <h3 className="panel__section-title">{t('input.boundaryTitle')}</h3>
+        <p className="panel__hint">{t('input.boundaryHint')}</p>
         {intermediates.length === 0 ? (
-          <p className="panel__hint">当前产线没有可作边界的中间产物。</p>
+          <p className="panel__hint">{t('input.boundaryNone')}</p>
         ) : (
           intermediates.map((id) => {
             const supplied = Object.prototype.hasOwnProperty.call(supplies, id);
@@ -159,7 +171,7 @@ export default function InputTab() {
                       else removeSupply(id);
                     }}
                   />
-                  当作已有：{itemName(id)}
+                  {t('input.boundaryAsHave', { name: itemName(id, lang) })}
                 </label>
                 {supplied ? (
                   <SupplyRow
@@ -178,9 +190,13 @@ export default function InputTab() {
 
       {derived.forward && derived.forward.bottlenecks.length > 0 ? (
         <section className="panel__section">
-          <h3 className="panel__section-title">瓶颈</h3>
+          <h3 className="panel__section-title">{t('input.bottleneckTitle')}</h3>
           <p className="panel__hint">
-            {derived.forward.bottlenecks.map(itemName).join('、')} 限制了产量。
+            {t('input.bottleneckHint', {
+              items: derived.forward.bottlenecks
+                .map((id) => itemName(id, lang))
+                .join(lang === 'zh' ? '、' : ', '),
+            })}
           </p>
         </section>
       ) : null}

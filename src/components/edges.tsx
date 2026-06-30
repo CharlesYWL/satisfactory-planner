@@ -1,4 +1,5 @@
 import { memo, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -47,6 +48,7 @@ function FlowEdgeImpl({
   style,
   data,
 }: EdgeProps<FlowEdge>) {
+  const { t } = useTranslation();
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -84,8 +86,8 @@ function FlowEdgeImpl({
               className={`sf-edge-label__belt${d.overBelt ? ' sf-edge-label__belt--over' : ''}`}
               title={
                 d.overBelt
-                  ? `超过单条 ${d.beltMark} 上限，需 ${d.beltCount} 条 ${d.beltMark} 或更高带速`
-                  : `建议带速 ${d.beltMark}`
+                  ? t('edge.overBelt', { mark: d.beltMark, count: d.beltCount })
+                  : t('edge.suggestBelt', { mark: d.beltMark })
               }
             >
               {d.overBelt ? `${d.beltMark}×${d.beltCount} ⚠` : d.beltMark}

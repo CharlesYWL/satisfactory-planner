@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Background,
   BackgroundVariant,
@@ -14,6 +15,7 @@ import '@xyflow/react/dist/style.css';
 
 import type { GameData } from '../lib';
 import { gameData as defaultData } from '../lib';
+import { buildingName, itemName, useLang } from '../i18n';
 import { buildFlow, layoutFlow, type GraphResult } from './buildFlow';
 import { edgeTypes } from './edges';
 import { formatRate, nodeTypes, type AppFlowNode, type DetailLevel } from './nodes';
@@ -43,10 +45,12 @@ export default function FlowGraph({
   direction = 'LR',
   detail = 'detailed',
 }: FlowGraphProps) {
+  const { t } = useTranslation();
+  const lang = useLang();
   const layouted = useMemo(() => {
-    const { nodes, edges } = buildFlow(result, data, detail);
+    const { nodes, edges } = buildFlow(result, data, detail, lang);
     return { nodes: layoutFlow(nodes, edges, direction), edges };
-  }, [result, data, direction, detail]);
+  }, [result, data, direction, detail, lang]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<AppFlowNode>(layouted.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(layouted.edges);
@@ -60,7 +64,7 @@ export default function FlowGraph({
     () => {
       const map = new Map<string, { name: string; count: number; power: number }>();
       for (const m of result.machines) {
-        const name = data.buildings[m.machineId]?.name ?? m.machineId;
+        const name = buildingName(m.machineId, lang, data);
         const cur = map.get(m.machineId) ?? { name, count: 0, power: 0 };
         cur.count += m.machineCountInteger;
         cur.power += m.power;
@@ -68,18 +72,18 @@ export default function FlowGraph({
       }
       return [...map.values()].sort((a, b) => b.power - a.power);
     },
-    [result.machines, data],
+    [result.machines, data, lang],
   );
 
   const rawRows = useMemo(
     () =>
       Object.entries(result.rawTotals)
-        .map(([id, rate]) => ({ name: data.items[id]?.name ?? id, rate }))
+        .map(([id, rate]) => ({ name: itemName(id, lang, data), rate }))
         .sort((a, b) => b.rate - a.rate),
-    [result.rawTotals, data],
+    [result.rawTotals, data, lang],
   );
 
-  const targetName = data.items[result.itemId]?.name ?? result.itemId;
+  const targetName = itemName(result.itemId, lang, data);
 
   return (
     <ReactFlow
@@ -102,19 +106,22 @@ export default function FlowGraph({
 
       <Panel position="top-left">
         <div className="sf-hud">
-          <div className="sf-hud__label">目标产线</div>
+          <div className="sf-hud__label">{t('graph.targetLine')}</div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>
             {formatRate(result.targetRate)}/min · {targetName}
           </div>
           <div className="sf-legend" style={{ marginTop: 8 }}>
             <div className="sf-legend__item">
-              <span className="sf-legend__dot" style={{ background: '#e5484d' }} />原料
+              <span className="sf-legend__dot" style={{ background: '#e5484d' }} />
+              {t('graph.legendRaw')}
             </div>
             <div className="sf-legend__item">
-              <span className="sf-legend__dot" style={{ background: '#4caf50' }} />加工
+              <span className="sf-legend__dot" style={{ background: '#4caf50' }} />
+              {t('graph.legendMachine')}
             </div>
             <div className="sf-legend__item">
-              <span className="sf-legend__dot" style={{ background: '#ff8c00' }} />成品
+              <span className="sf-legend__dot" style={{ background: '#ff8c00' }} />
+              {t('graph.legendProduct')}
             </div>
           </div>
         </div>
@@ -122,12 +129,12 @@ export default function FlowGraph({
 
       <Panel position="bottom-right">
         <div className="sf-hud sf-hud--power">
-          <div className="sf-hud__label">总功耗</div>
+          <div className="sf-hud__label">{t('graph.totalPower')}</div>
           <div className="sf-hud__power-value">
             {Math.round(result.totalPower)} <small>MW</small>
           </div>
           <details className="sf-hud__group" open>
-            <summary className="sf-hud__label sf-hud__summary">机器功耗（按类型）</summary>
+            <summary className="sf-hud__label sf-hud__summary">{t('graph.machinePower')}</summary>
             {buildingRows.map((b) => (
               <div className="sf-hud__row" key={b.name}>
                 <span>
@@ -138,7 +145,7 @@ export default function FlowGraph({
             ))}
           </details>
           <details className="sf-hud__group">
-            <summary className="sf-hud__label sf-hud__summary">原矿需求</summary>
+            <summary className="sf-hud__label sf-hud__summary">{t('graph.rawDemand')}</summary>
             {rawRows.map((r) => (
               <div className="sf-hud__row" key={r.name}>
                 <span>{r.name}</span>

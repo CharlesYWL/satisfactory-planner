@@ -7,6 +7,7 @@ import type {
   TraceNode,
 } from '../lib';
 import { gameData as defaultData, BELTS, machineCapacity, suggestBelt } from '../lib';
+import { itemName as itemLabel, buildingName as buildingLabel, recipeName as recipeLabel, type Lang } from '../i18n';
 import type { FlowEdgeData } from './edges';
 import {
   formatRate,
@@ -168,13 +169,14 @@ function makeEdge(
   targetItemId: string,
   rate: number,
   data: GameData,
+  lang: Lang,
 ): Edge {
   const item = data.items[sourceItemId];
   const color = visibleColor(item?.color || FALLBACK_COLOR);
   const belt = suggestBelt(rate);
   const overBelt = rate > MAX_BELT_SPEED + 1e-6;
   const edgeData: FlowEdgeData = {
-    itemName: item?.name ?? sourceItemId,
+    itemName: itemLabel(sourceItemId, lang, data),
     itemImage: item?.image ?? '',
     color,
     rate,
@@ -208,6 +210,7 @@ export function buildFlow(
   result: GraphResult,
   data: GameData = defaultData,
   detail: DetailLevel = 'detailed',
+  lang: Lang = 'en',
 ): { nodes: AppFlowNode[]; edges: Edge[] } {
   const nodes: AppFlowNode[] = [];
   const edges: Edge[] = [];
@@ -244,9 +247,9 @@ export function buildFlow(
       data: {
         variant: isTarget ? 'product' : 'machine',
         itemId: node.itemId,
-        itemName: item?.name ?? node.itemId,
+        itemName: itemLabel(node.itemId, lang, data),
         itemImage: item?.image ?? '',
-        machineName: building?.name ?? node.machineId,
+        machineName: buildingLabel(node.machineId, lang, data),
         machineImage: building?.image ?? '',
         rate: summary?.rate ?? node.rate,
         machineCount,
@@ -257,7 +260,7 @@ export function buildFlow(
         isBottleneck,
         starved,
         recipeId: recipe?.id ?? node.recipeId,
-        recipeName: recipe?.name ?? node.recipeId,
+        recipeName: recipeLabel(recipe?.id ?? node.recipeId, lang, data),
         recipeDuration: recipe?.duration ?? 0,
         singleCapacity,
         detail,
@@ -266,7 +269,7 @@ export function buildFlow(
     nodes.push(machineNode);
 
     for (const input of node.inputs) {
-      edges.push(makeEdge(input.itemId, node.itemId, input.rate, data));
+      edges.push(makeEdge(input.itemId, node.itemId, input.rate, data, lang));
       if (input.kind !== 'produced') {
         resourceRate.set(input.itemId, (resourceRate.get(input.itemId) ?? 0) + input.rate);
       }
@@ -285,7 +288,7 @@ export function buildFlow(
       position: { x: 0, y: 0 },
       data: {
         itemId,
-        itemName: item?.name ?? itemId,
+        itemName: itemLabel(itemId, lang, data),
         itemImage: item?.image ?? '',
         rate,
         detail,

@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Handle, Position, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
 
 /** 节点信息详略级别。 */
@@ -65,10 +66,12 @@ export function formatRate(value: number): string {
 }
 
 function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
+  const { t } = useTranslation();
   const isProduct = data.variant === 'product';
   const detailed = data.detail === 'detailed';
   const overclocked = Math.abs(data.clockPct - 100) > 0.5;
   const utilPct = Math.round(data.utilization * 100);
+  const machineUnit = t('node.machines');
   const cls = [
     'sf-node',
     isProduct ? 'sf-node--product' : 'sf-node--machine',
@@ -81,17 +84,19 @@ function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
   // hover tooltip（原生 title，简单可靠，不引依赖）：配方 / 时长 / 单机产能 / 利用率 / 超频 / 功耗。
   const tip = [
     `${data.itemName} · ${data.recipeName}`,
-    `配方时长 ${formatRate(data.recipeDuration)}s`,
-    `单机产能 ${formatRate(data.singleCapacity)}/min`,
-    `利用率 ${utilPct}%`,
-    `超频 ${Math.round(data.clockPct)}%`,
-    `功耗 ${Math.round(data.power)}MW（${data.machineCountInteger} 台）`,
+    t('node.tipDuration', { s: formatRate(data.recipeDuration) }),
+    t('node.tipCapacity', { cap: formatRate(data.singleCapacity) }),
+    t('node.tipUtilization', { util: utilPct }),
+    t('node.tipClock', { clock: Math.round(data.clockPct) }),
+    t('node.tipPower', { power: Math.round(data.power), count: data.machineCountInteger }),
   ].join('\n');
 
   return (
     <div className={cls} title={tip}>
       <Handle type="target" position={Position.Left} />
-      {data.isBottleneck ? <span className="sf-node__flag sf-node__flag--bottleneck">瓶颈</span> : null}
+      {data.isBottleneck ? (
+        <span className="sf-node__flag sf-node__flag--bottleneck">{t('common.bottleneck')}</span>
+      ) : null}
       {data.starved ? (
         <span className="sf-node__flag sf-node__flag--starved">{utilPct}%</span>
       ) : null}
@@ -105,13 +110,17 @@ function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
           <div className="sf-node__rate">{formatRate(data.rate)}/min</div>
         ) : null}
         <div className="sf-node__count">
-          ×{data.machineCount.toFixed(2)} <small>台</small>
+          ×{data.machineCount.toFixed(2)}
+          {machineUnit ? <small> {machineUnit}</small> : null}
           {overclocked ? <small className="sf-node__clock"> @{Math.round(data.clockPct)}%</small> : null}
         </div>
         {detailed ? (
           <div className="sf-node__sub">
-            建造 {data.machineCountInteger} 台 · 利用率 {utilPct}% ·{' '}
-            {Math.round(data.power)}MW
+            {t('node.detail', {
+              count: data.machineCountInteger,
+              util: utilPct,
+              power: Math.round(data.power),
+            })}
           </div>
         ) : null}
       </div>
@@ -121,6 +130,7 @@ function MachineNodeImpl({ data }: NodeProps<MachineFlowNode>) {
 }
 
 function ResourceNodeImpl({ data }: NodeProps<ResourceFlowNode>) {
+  const { t } = useTranslation();
   return (
     <div className="sf-node sf-node--resource">
       <div className="sf-node__icon sf-node__icon--raw">
@@ -128,7 +138,7 @@ function ResourceNodeImpl({ data }: NodeProps<ResourceFlowNode>) {
       </div>
       <div className="sf-node__body">
         <div className="sf-node__title">{data.itemName}</div>
-        <div className="sf-node__sub">原料 · {formatRate(data.rate)}/min</div>
+        <div className="sf-node__sub">{t('node.resource', { rate: formatRate(data.rate) })}</div>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>
