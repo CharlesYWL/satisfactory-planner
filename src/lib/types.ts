@@ -33,6 +33,10 @@ export interface Building {
   beltSpeed?: number | null;
   /** 采矿机在 不纯 / 普通 / 纯净 矿脉上的采集速率。 */
   extractionRate?: Record<string, number> | null;
+  /** 物理入口数（进料口总数），如 Assembler=2、Manufacturer=4；缺省时回退配方原料种类数。 */
+  input?: number | null;
+  /** 物理出口数（产物口总数），如 Assembler=1、Refinery=2。 */
+  output?: number | null;
 }
 
 /** 一条可自动化配方（每周期产出/消耗）。 */
