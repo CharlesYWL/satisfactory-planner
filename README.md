@@ -1,233 +1,158 @@
-# Satisfactory 产线配平工具 (Better Satisfactory Planner)
+# Better Satisfactory Planner
 
-正向 + 反向生产线配平计算器。对标 satisfactory-calculator，但支持**产线取向**（固定原矿输入→算整数机器）+ **成品取向**（目标成品→倒推原矿）。
+> 《幸福工厂 / Satisfactory》生产线配平计算器 —— **双向配平** + **施工图级走线**，为新手而生。
 
-## 项目状态
-Multica 项目: 「Better Satisfactory Planner」(MYW-43~48)
+对标 [satisfactory-calculator](https://satisfactory-calculator.com/)，但补上了它最欠缺的东西：不仅告诉你「要多少台机器」，还画出**照着就能搭**的施工图（哪台机器、走几级传送带、分离器/合并器接到哪）。
 
-- [x] M0 数据层（官方数据归一化 + 反向索引）
-- [x] M1 配平算法 + 单测
-- [x] M2 流程图渲染 (React Flow)
-- [x] M3 交互三 Tab + 替代配方智能筛选 + 超频
-- [x] M4 打磨（边图标/带速建议 · 瓶颈高亮 · 功耗分组 · tooltip）
-- [x] 改进4 施工图视图（展开机器阵列 + manifold 详细走线 · 可切换）
-- [ ] M5 部署（可选）
+纯前端单页应用，游戏数据打包进包内，**完全离线可用**。
 
-## 数据层 (data/)
-- `data/scim-en-stable.json` — 官方游戏数据 (SCIM en-Stable, 1.5MB)
-- `data/normalize.py` — 归一化脚本
-- `data/data.normalized.json` — 归一化输出（178 物品 / 551 建筑 / 306 可自动化配方 / 110 替代配方 + producers 反向索引）
+![施工图视图](docs/screenshot-blueprint.png)
 
-### 数据 schema (data.normalized.json)
+---
+
+## ✨ 核心特性
+
+### 双向配平
+- **成品取向（反向）** —— 给目标成品/min，倒推完整生产树 + 原矿需求 + 总功耗。对标传统计算器。
+- **产线取向（正向）** —— 给固定原矿输入（60/120/240/自定义），算出**整数台机器** + 实际产量 + 瓶颈高亮。这才是新手实际搭厂的思路。
+
+### 两种视图（可切换）
+- **拓扑图** —— 抽象「组对组」，机器折叠 `xN`，贝塞尔曲线，一眼看全局配平。
+- **施工图** —— 对标 B 站 UP 主的手绘施工图：机器阵列展开成 N 台独立机器，**manifold 歧管供料**走线，分离器/合并器精确到每台机器，直角连线模拟地基对齐。
+
+### 施工图的细节
+- **传送带分级配色** —— Mk1~Mk6 冷→暖色 + 图例，一眼看出哪段要升级高级带、哪段省钱。
+- **分离器(分)/合并器(合)** —— manifold 主干供料：N 台机器 = N-1 个分离器串联抽料 / N-1 个合并器汇流，标注每段流量。
+- **多入口 offset** —— 装配站（2 入口）、制造器（4 入口）等，不同物料的传送带各自接到**错开的独立入口**，不合流到一个点，跟游戏物理接口一致。
+- **物流汇总** —— 分/合总数、各带级用量、成品对账速率。
+
+### 交互
+- **图片网格选品** —— 目标产品用带图标的弹窗网格选（分类 + 搜索），不用对着一堆英文下拉猜。
+- **替代配方智能筛选** —— 只列**当前产线相关**的候选配方（★ 标注替代），不糊脸列游戏几百个。
+- **超频** —— 产线取向可开超频（1.0~2.5x）把多台凑成更少的超频机器；关则严格整数台数 + 利用率。
+- **中英双语** —— i18next，默认中文，一键切 English，物品/机器/配方名全覆盖。
+- **可折叠面板** —— 左上信息 / 右下对账 / 右侧配置面板都能收起，腾出画布 ≥80%。
+
+| 拓扑图视图 | 施工图（面板折叠） |
+| --- | --- |
+| ![拓扑图](docs/screenshot-topology.png) | ![施工图折叠](docs/screenshot-blueprint-collapsed.png) |
+
+---
+
+## 🚀 快速开始
+
+```bash
+npm install      # 安装依赖
+npm run dev      # 本地预览 → http://localhost:5173
+npm test         # 单测 (vitest, 47 项)
+npm run build    # 类型检查 + 生产构建
+```
+
+纯静态，`npm run build` 产物可直接部署到任意静态托管（GitHub Pages / Vercel / Nginx / …）。
+
+---
+
+## 🗂 数据层（`data/`）
+
+游戏数据来自官方 SCIM 数据，**全 JSON 驱动，零硬编码配方**。游戏更新时更新流程很干净：
+
+```bash
+# 1. 重新下载官方数据（satisfactory-calculator 的 gameData）到 data/scim-en-stable.json
+# 2. 重新归一化
+python3 data/normalize.py            # → data/data.normalized.json
+python3 data/build_zh_names.py       # → src/i18n/names.zh.json（中文名映射）
+```
+
+| 文件 | 说明 |
+| --- | --- |
+| `data/scim-en-stable.json` | 官方游戏数据 (SCIM en-Stable, ~1.5MB) |
+| `data/normalize.py` | 归一化脚本 |
+| `data/data.normalized.json` | 归一化输出：**178 物品 / 551 建筑 / 306 可自动化配方（110 替代）** + `producers` 反向索引 |
+| `public/icons/` | 180 个本地图标（绕过 SCIM CDN 防盗链，离线可用） |
+
+### schema (`data.normalized.json`)
 ```
 items{id, name, category, color, image, isRaw}
-buildings{id, name, power, image, beltSpeed, extractionRate, input?, output?}   # input/output = 物理进/出料口数（Assembler 2/1、Manufacturer 4/1；缺省 null）
+buildings{id, name, power, image, beltSpeed, extractionRate, input?, output?}
+        # input/output = 物理进/出料口数（Assembler 2/1、Manufacturer 4/1）
 recipes{id, name, machines[], duration(秒), ingredients{item:qty/周期}, produce{item:qty/周期}, isAlternate}
 producers{itemId: [recipeId...]}   # 反向索引：物品→能生产它的配方（替代配方筛选用）
 ```
 
 ### 关键公式
-- 单机产能/min = produce_qty × 60 / duration × 超频(1.0~2.5)
-- 超频功耗 = 基础功耗 × 超频^1.321321
-- 带速: Mk1=60 Mk2=120 Mk3=270 Mk4=480 Mk5=780 Mk6=1200/min
+- 单机产能/min = `produce_qty × 60 / duration × clock`（clock 1.0~2.5）
+- 超频功耗/MW = `基础功耗 × clock ^ 1.321321`
+- 带速档位：Mk1=60 · Mk2=120 · Mk3=270 · Mk4=480 · Mk5=780 · Mk6=1200 /min
 
-## 技术栈 (计划)
-Vite + React + TypeScript + @xyflow/react (流程图) + Zustand + i18next (中英双语)。纯前端，数据打包，离线可用。深色 #222 + Satisfactory 橙。
+---
 
-## 工程 / 开发
+## 🛠 技术栈
 
-```bash
-npm install      # 安装依赖
-npm run dev      # 本地预览（M3 交互页面：左流程图 + 右三 Tab 面板）
-npm test         # 跑算法单测 (vitest)
-npm run build    # 类型检查 + 生产构建
-```
+Vite + React + TypeScript + [@xyflow/react](https://reactflow.dev/)（流程图）+ [@dagrejs/dagre](https://github.com/dagrejs/dagre)（拓扑布局）+ Zustand（状态）+ i18next（双语）。深色主题 + Satisfactory 橙。
 
-工程为 Vite + React + TS 脚手架；M1 只交付 `src/lib/` 下的纯函数算法层 + 单测，不含 UI。
+## 🏗 架构
 
-## M1 · 配平算法 (`src/lib/`)
-
-纯函数、无副作用、无 UI 依赖。默认数据源为打包进来的 `data/data.normalized.json`，
-所有函数都可传入第三/可选参数 `data`（或 `options.data`）注入自定义数据，便于测试。
+**算法层（`src/lib/`）纯函数、无 UI 依赖**，渲染层只做透传/派生，两者严格分离。
 
 | 模块 | 职责 |
 | --- | --- |
-| `types.ts` | `GameData` / `Item` / `Building` / `Recipe` 类型 |
-| `data.ts` | 加载归一化数据 + `getItem/getRecipe/getBuilding/isRawItem` |
-| `rates.ts` | `machineCapacity` / `outputPerMin` / `overclockPower` / `BELTS` / `suggestBelt` |
-| `recipes.ts` | `chooseRecipe`（默认 base，可 override）/ `getRelevantRecipes` |
-| `trace.ts` | `traceProduction` 自顶向下展开生产树（正反向共用，含循环保护） |
-| `forward.ts` | `balanceForward` 正向配平（产线取向） |
-| `reverse.ts` | `balanceReverse` 反向配平（成品取向） |
-| `logistics.ts` | `computeLogistics` 物流估算（分离器/合并器数量 + 带级，先合再分主干模型） |
-| `blueprint.ts` | `computeBlueprint` 施工图计算（机器阵列展开 + manifold 线性级联，分/合 = N-1） |
+| `lib/types.ts` | `GameData` / `Item` / `Building` / `Recipe` 类型 |
+| `lib/data.ts` | 加载归一化数据 + `getItem/getRecipe/getBuilding/isRawItem` |
+| `lib/rates.ts` | `machineCapacity` / `outputPerMin` / `overclockPower` / `BELTS` / `suggestBelt` |
+| `lib/recipes.ts` | `chooseRecipe`（默认 base，可 override）/ `getRelevantRecipes` |
+| `lib/trace.ts` | `traceProduction` 自顶向下展开生产树（正反向共用，含循环保护） |
+| `lib/forward.ts` | `balanceForward` 正向配平（产线取向） |
+| `lib/reverse.ts` | `balanceReverse` 反向配平（成品取向） |
+| `lib/logistics.ts` | `computeLogistics` 物流估算（分离器/合并器 + 带级） |
+| `lib/blueprint.ts` | `computeBlueprint` 施工图计算（机器阵列 + manifold 级联） |
+| `store/plannerStore.ts` | Zustand 全局状态 + 派生 hook（输入变→实时重算重渲染） |
+| `components/FlowGraph` | 拓扑图渲染 |
+| `components/Blueprint*` | 施工图渲染（自定义节点/直角边/HUD） |
+| `components/panel/` | 产出/原料/选项三 Tab + 图片选品 + 替代配方下拉 |
+| `i18n/` | i18next 资源 + 物品/机器/配方名查表（三级优雅回退） |
 
-入口 `src/lib/index.ts` 统一导出。
+图层适配器（`components/buildFlow.ts`）把正/反向两种算法结果归一化成同一个 `GraphResult`，
+于是同一套渲染既能画反向也能画正向，算法层完全不感知 UI。
 
-### 关键公式
-- 单机产能/min = `produce_qty × 60 / duration × clock`（clock 1.0~2.5）
-- 超频功耗/MW = `基础功耗 × clock ^ 1.321321`
-- `suggestBelt(rate)` 返回够用的最低带速档（Mk1=60 … Mk6=1200）
-
-### 正向配平 — 产线取向（新手重点）
-
-固定各原料供给速率 → 找瓶颈算出实际成品产量 + 每级整数机器（或超频凑整）。
-供给表里的物品即「输入边界」，展开到它们即停止。
+### 快速上手 API
 
 ```ts
-import { balanceForward } from './lib';
+import { balanceReverse, balanceForward, getRelevantRecipes } from './lib';
 
-// 钢管 15/min + 线材 40/min → 恰好 5 定子/min，1 台 Assembler，利用率 100%
-const r = balanceForward('Desc_Stator_C', {
-  Desc_SteelPipe_C: 15,
-  Desc_Wire_C: 40,
-});
-r.targetOutput;   // 5
-r.bottlenecks;    // ['Desc_SteelPipe_C', 'Desc_Wire_C']（两者同时到顶）
-r.nodes[0];       // { machineId:'Build_AssemblerMk1_C', machineCount:1, clockPct:100, utilization:1, ... }
-
-// 超频模式：把多台机器凑成更少的超频机器
-balanceForward('Desc_Wire_C', { Desc_CopperIngot_C: 35 }, { mode: 'overclock' });
-// → 1 台 Constructor @233.3%
-```
-
-`mode: 'integer'`（默认）给出严格整数台数 + 利用率；`mode: 'overclock'` 在
-`machineCount = ceil(需求 / (单机产能 × maxClock))` 下回算每台超频百分比（默认上限 2.5）。
-
-### 反向配平 — 成品取向（对标原网站）
-
-目标成品/min → 递归倒推完整生产树 + 原矿需求 + 总功耗。机器数允许小数。
-
-```ts
-import { balanceReverse } from './lib';
-
+// 成品取向：5 定子/min → 倒推
 const r = balanceReverse('Desc_Stator_C', 5);
-r.totalPower;                       // 47 (MW)，整数台机器满载，与游戏一致
-r.rawTotals;                        // { Desc_OreIron_C:22.5, Desc_Coal_C:22.5, Desc_OreCopper_C:20 }
-r.machines;                         // 每个自产物品的台数（小数）+ 整数台数 + 功耗
-r.tree;                             // 完整生产树（可用于 M2 流程图）
-```
+r.totalPower;   // 47 (MW)，与游戏一致
+r.rawTotals;    // { Desc_OreIron_C:22.5, Desc_Coal_C:22.5, Desc_OreCopper_C:20 }
 
-### 替代配方
+// 产线取向：钢管 15/min + 线材 40/min → 恰好 5 定子/min，1 台 Assembler 100%
+balanceForward('Desc_Stator_C', { Desc_SteelPipe_C: 15, Desc_Wire_C: 40 });
 
-正反向函数都接受 `recipeId`（目标产品配方）与 `recipeOverrides`（中间产物 itemId → recipeId）：
-
-```ts
-balanceReverse('Desc_Stator_C', 5, {
-  recipeOverrides: { Desc_Stator_C: 'Recipe_Alternate_Stator_C' },
-});
-```
-
-`getRelevantRecipes(itemId)` 遍历默认生产树涉及的所有中间产物，用 `producers`
-取出能生产它们的全部配方（含替代配方），供 UI 智能下拉用——只列相关配方，不糊脸：
-
-```ts
-const rel = getRelevantRecipes('Desc_Stator_C');
-rel.items;    // ['Desc_CopperIngot_C','Desc_SteelIngot_C','Desc_SteelPipe_C','Desc_Stator_C','Desc_Wire_C']
-rel.recipes;  // 上述物品的全部候选配方并集（含 Recipe_Alternate_Stator_C 等）
-rel.byItem;   // { 物品: [候选配方...] }
+// 替代配方智能筛选：只列当前产线相关的候选配方
+getRelevantRecipes('Desc_Stator_C');  // { items, recipes, byItem }
 ```
 
 ### 测试
+`vitest`，覆盖配平/物流/施工图算法 + i18n 查表。`npm test` **47/47 全绿**。
 
-`src/lib/__tests__/balance.test.ts`（vitest）覆盖全部验收标准：定子正向 5/min·100% 利用率、
-反向 47MW、深链到原矿、`suggestBelt`、`getRelevantRecipes` 相关性、替代配方等。`npm test` 全绿。
+---
 
-## M3 · 交互配置面板 (`src/store/` + `src/components/panel/`)
+## 📋 项目状态
 
-左侧是 M2 生产链流程图，右侧是三 Tab 交互面板。全局状态用 **Zustand**
-（`src/store/plannerStore.ts`）统一管理——任意输入变化 → 派生结果实时重算 → 流程图重渲染。
-算法层（`src/lib`）与 M2 渲染层（`FlowGraph`）保持复用、不改写。
+Multica 项目「Better Satisfactory Planner」全部里程碑 + 改进已完成：
 
-### 状态与派生（`src/store/plannerStore.ts`）
+- [x] 数据层（官方数据归一化 + 反向索引 + 物理口数）
+- [x] 双向配平算法 + 单测
+- [x] 流程图渲染（React Flow）
+- [x] 交互三 Tab + 替代配方智能筛选 + 超频
+- [x] 打磨（边图标/带速建议/瓶颈高亮/功耗分组/tooltip）
+- [x] 图片网格选品 · i18next 中英双语
+- [x] 施工图视图（机器阵列 + manifold 走线 + 传送带分级）
+- [x] 装配站多入口 offset 走线 + 面板可折叠
+- [ ] 部署（可选，待定 GitHub Pages / 自托管）
 
-单一 store 持有：`targetItemId` / `mode`（reverse 成品取向、forward 产线取向）/
-`targetRate` / `supplies` / `recipeOverrides` / `overclockEnabled` / `maxClock` /
-`direction`（LR·TB）/ `detail`（simple·detailed）。
+---
 
-派生 hook（均 `useMemo` 订阅相关切片）：
+## 致谢
 
-- `usePlannerDerived()` → 归一化 `graph`（喂给 `FlowGraph`）+ 当前 `forward` / `reverse` 原始结果。
-  - 反向：`balanceReverse` → `reverseToGraph`。
-  - 正向：`balanceForward`（integer / overclock）+ 在实际产量下重跑 `traceProduction` → `forwardToGraph`。
-- `useRelevantRecipes()` → `getRelevantRecipes`，替代配方下拉的唯一数据源。
-- `useChainStructure()` → 与取向无关的产线结构枚举（原料 Tab 列原矿 / 中间产物用）。
-
-> 图层适配器 `reverseToGraph` / `forwardToGraph`（`src/components/buildFlow.ts`）把两种 M1 结果
-> 归一化成同一个 `GraphResult`，于是同一套 M2 渲染既能画反向也能画正向，算法层无须感知 UI。
-
-### 三 Tab（`src/components/panel/`）
-
-- **产出 Tab (`OutputTab`)**：模式切换（成品 / 产线取向）、目标产品搜索下拉（全部「可生产」物品）、
-  反向的目标产量/min（正向则显示由供给决定的实际产量）、以及替代配方区块。
-- **原料 Tab (`InputTab`)**：
-  - 反向：只读列出原矿需求 + 建议带速。
-  - 正向：每个原料选带速档（Mk1~Mk6）或自定义速率 → 写进 `supplies`，实时算瓶颈（高亮 + 消耗/剩余）；
-    还可把任一中间产物勾为「已有半成品」，作为输入边界让算法展开到它即停。
-- **选项 Tab (`OptionsTab`)**：图表方向 LR/TB、信息详略 simple/detailed（简单模式隐藏建筑名与利用率/功耗小字）、
-  超频开关（开 + 产线取向 → `mode:'overclock'` + `maxClock` 滑块 1.0~2.5；关 → 整数机器数）。
-
-### 替代配方下拉（核心）
-
-`RecipePicker` 对当前产线涉及的**每个中间产物**给一个配方下拉，选项**只**来自
-`getRelevantRecipes().byItem[itemId]`——即与当前产线相关的候选配方（★ 标注替代配方），
-绝不糊脸列出游戏几百个配方。选某配方 → 写进 `recipeOverrides` → 重新 `getRelevantRecipes` + 重算 →
-图与原料随之更新（换配方可能改变原料结构，下拉列表也跟着变）。
-
-
-## M4 · 打磨 (`src/components/`)
-
-在 M1 算法 / M2 渲染 / M3 面板都不改写的前提下，只在**渲染 / 样式 / 数据透传层**加 5 项打磨。
-算法层（`src/lib`）与 store 对外行为不变——新增字段都是从既有 forward 结果 / `buildFlow` 透传的只读派生。
-
-- **边图标 + 速率（`src/components/edges.tsx`）**：自定义 `flow` 边（`EdgeLabelRenderer` + `getSmoothStepPath`），
-  label = 物品小图标（SCIM CDN，~17px，`onError` 隐藏 img 优雅降级为纯文字）+ 物品名 + `xx/min`，边色沿用 `item.color`。
-- **带速档位建议**：每条物料边旁标注 `suggestBelt(rate).mark`（Mk1~Mk6）小 badge；速率超过单条最高档（Mk6=1200/min）
-  时变橙色并提示 `Mk6×N ⚠`（需多条带 / 更高带速）。
-- **瓶颈 / 欠料高亮（正向限定）**：forward 结果的 `isBottleneck` 节点 → 红外框 + 「瓶颈」角标；
-  利用率 < 100% 的非瓶颈节点 → 黄外框 + 利用率角标。反向取向不受影响（小数利用率只是凑整，不视为欠料）。
-  通过给节点 data 加 `isBottleneck` / `starved` 字段 + `nodes.tsx` 切 class + `styles.css` 加样式实现。
-- **功耗汇总（`FlowGraph.tsx` HUD）**：除总功耗外，按 `buildingId` 聚合「台数 × 单机功耗」，
-  在可折叠 `<details>` 区块列出每种机器 `名称 ×台数 · 小计MW`；原矿需求同样收进可折叠区块。
-- **机器节点 tooltip**：hover 原生 `title`（不引重型依赖），显示配方名 / 配方时长(`getRecipe(id).duration`s) /
-  单机产能(`machineCapacity`)/min / 利用率% / 超频% / 功耗。`recipeName` `recipeDuration` `singleCapacity` 由 `buildFlow.ts` 透传进节点 data。
-
-> 数据透传：`GraphMachine` 加只读 `isBottleneck`，`GraphResult` 加 `mode`，`buildFlow` 据此派生
-> 节点的 `isBottleneck` / `starved` 与 tooltip 字段、边的图标 / 速率 / 建议带速——M1 单测仍 18/18 全绿。
-
-## 改进 · 中英文国际化 (`src/i18n/`)
-
-i18next + react-i18next，**默认中文**，选项 Tab 顶部可一键切「中文 / English」，全 UI（含流程图节点 / 边 / HUD / tooltip）实时跟着变。数字格式（`x/min`、功耗 MW、利用率 %）不翻译。
-
-- **UI 文案**（`src/i18n/ui.ts`）：按钮 / 标签 / Tab 名 / 提示等静态文案的 `zh` / `en` 资源，组件用 `useTranslation()` 的 `t()` 读取，插值占位如 `{{mark}}` `{{count}}`。
-- **物品 / 机器 / 配方名**（data 驱动查表）：中文名由 `data/build_zh_names.py` 从 SCIM `zh-Stable` 游戏数据生成到 `src/i18n/names.zh.json`（`{items,buildings,recipes}`，覆盖归一化数据包里全部 178 物品 / 551 建筑 / 306 配方）。英文名仍取自 `data.normalized.json`。`names.ts` 的 `itemName/buildingName/recipeName(id, lang)` 做 `中文→英文→id` 三级**优雅回退**，缺翻译不报错也不显示 i18n key 原文。
-- **名称落点**：图层名称在 `buildFlow(result, data, detail, lang)` 里按当前语言烘焙进节点 / 边 data，`FlowGraph` 用 `useLang()` 订阅语言并加进 `useMemo` 依赖；UI chrome 则各组件就地 `t()`。算法层（`src/lib`）完全不感知 i18n，保持纯净。
-- **持久化**：语言存 `localStorage`（隐私模式 / 不可用时静默回退默认中文）。
-- **测试**：`src/i18n/__tests__/` 校验查表正确性、全量覆盖、zh/en key 对齐、运行时切换与插值。`npm test` 28/28 全绿。
-
-### 重新生成中文名映射
-
-```bash
-python3 data/build_zh_names.py            # 从 SCIM CDN 抓取 zh-Stable 并生成
-python3 data/build_zh_names.py zh.json    # 或用本地 zh-Stable.json
-```
-
-## 改进4 · 施工图视图 (`src/lib/blueprint.ts` + `src/components/Blueprint*`)
-
-选项 Tab 顶部「**画布视图**」可在 **拓扑图 / 施工图** 间切换（默认拓扑图，二者并存互不影响）。
-
-- **拓扑图（原有）**：抽象「组对组」，机器折叠 `xN`、贝塞尔曲线，看全局配平——不改动。
-- **施工图（新）**：对标 B 站施工图，把每个机器组**展开成 N 台独立机器阵列**，按游戏最通用的
-  **manifold（歧管主干供料）** 给出「照着能搭」的走线：
-  - **机器阵列**：`x6 构造器` 渲染成 6 个独立机器节点并排（手工网格坐标，非 dagre）。
-  - **输入 manifold**：每种原料一条主干带，沿阵列走，每台机器前一个 **1→2 分离器(分)** 抽出该台的量，
-    尾料续接下一台，最后一台吃尾料 → N 台 = **N-1 个分离器**。
-  - **输出 manifold**：各台产物用 **2→1 合并器(合)** 级联汇成一条主干 → N 台 = **N-1 个合并器**。
-  - **直角走线**：边用 `smoothstep` + `borderRadius:0` → 纯 90° 折线，模拟地基对齐。
-  - **传送带分级**：沿用 Mk1~Mk6 冷→暖配色 + 左上图例；主干按整段流量定档，超单条最高档给并行带条数。
-  - **流量标注 + 底部对账**：入口/支路/产物流量标注，右下 HUD 给成品产出速率 + 机器/分/合总数 + 各带级用量。
-
-**分层**：纯计算 `blueprint.ts`（`computeBlueprint(tree, machineCountOf, rateOf)` → `BlueprintPlan`，可单测）与
-渲染分离——`blueprintFlow.ts` 把 plan 转成 React Flow 的 nodes/edges + 手工坐标，`blueprintNodes.tsx` /
-`blueprintEdges.tsx` 为自定义节点（机器/分合/源/输出端点）与直角边，`BlueprintGraph.tsx` 装配画布与 HUD。
-算法层（`src/lib/forward|reverse|trace`）与拓扑视图（`FlowGraph`）零改动。`npm test` 47/47 全绿。
+游戏数据来自 [Satisfactory Calculator (SCIM)](https://satisfactory-calculator.com/)。
+《Satisfactory》© Coffee Stain Studios。本工具为社区非官方作品。
