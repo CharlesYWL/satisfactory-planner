@@ -79,10 +79,10 @@ export default function OutputTab() {
               <input
                 className="panel__input panel__input--num"
                 type="number"
-                min={0.1}
-                step={0.5}
+                min={1}
+                step={1}
                 value={targetRate}
-                onChange={(e) => setTargetRate(Number(e.target.value) || 0.1)}
+                onChange={(e) => setTargetRate(Math.max(1, Math.round(Number(e.target.value) || 1)))}
               />
               <span className="panel__unit">/min</span>
             </label>

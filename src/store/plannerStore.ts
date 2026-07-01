@@ -116,7 +116,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     }
   },
 
-  setTargetRate: (rate) => set({ targetRate: Math.max(0.1, rate) }),
+  setTargetRate: (rate) => set({ targetRate: Math.max(1, Math.round(rate)) }),
 
   setSupply: (itemId, rate) =>
     set((s) => ({ supplies: { ...s.supplies, [itemId]: Math.max(0, rate) } })),

@@ -104,11 +104,19 @@ export function buildBlueprint(
 
   for (const g of plan.groups) {
     const N = g.machineCount;
-    const k = g.inputs.length;
+    const building = data.buildings[g.machineId];
+    // 入口数（顶部 handle 数）：优先用建筑物理入口数（building.input），没有再回退到配方原料种类数。
+    // 仍按物料种类各占一个 handle（每种料落到自己的入口），物理口数仅作上限/参照，
+    // 故取二者较大值：料多于物理口（罕见）时不丢 handle，物理口多于料时展示真实空口。
+    const materialKinds = g.inputs.length;
+    const physicalPorts = building?.input;
+    const k =
+      physicalPorts != null && physicalPorts > 0
+        ? Math.max(physicalPorts, materialKinds)
+        : materialKinds;
     const bandTop = y;
     const machineY = bandTop + k * BELT_ROW_H + HEAD_PAD;
     const outY = machineY + MACHINE_H + FOOT_GAP;
-    const building = data.buildings[g.machineId];
     const machineName = buildingLabel(g.machineId, lang, data);
 
     // --- 机器阵列 ---

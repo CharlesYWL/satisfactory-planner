@@ -2,10 +2,14 @@
 """Normalize SCIM en-Stable.json into a clean dataset for the planner.
 Outputs: data.normalized.json with items, buildings, recipes (forward-indexed).
 """
-import json, re, sys
+import json, re, sys, os
 
-SRC = 'scim-en-stable.json'
-OUT = 'data.normalized.json'
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRC = os.path.join(HERE, 'scim-en-stable.json')
+OUT = os.path.join(HERE, 'data.normalized.json')
+# 本地图标目录（相对仓库根 public/icons）。SCIM CDN 有 hotlink 防盗链，见 commit 9e8cf5b：
+# 只保留已下载到 public/icons 的图标，其余图片字段留空（运行时 <img onError> 优雅降级）。
+ICON_DIR = os.path.join(HERE, '..', 'public', 'icons')
 
 d = json.load(open(SRC))
 R = d['recipesData']; B = d['buildingsData']; I = d['itemsData']
@@ -17,6 +21,11 @@ def short(cls):
     tail = cls.split('.')[-1]
     return tail
 
+def local_icon(prefix, sid):
+    # items -> icons/i_<id>.png、buildings -> icons/b_<id>.png（仅当文件已本地打包时）。
+    fn = '%s_%s.png' % (prefix, sid)
+    return 'icons/%s' % fn if os.path.exists(os.path.join(ICON_DIR, fn)) else ''
+
 # --- Items ---
 items = {}
 ore_categories = {'ore'}
@@ -27,7 +36,7 @@ for ck, iv in I.items():
         'name': iv.get('name', sid),
         'category': iv.get('category', ''),
         'color': iv.get('color', '#888888'),
-        'image': iv.get('image', ''),
+        'image': local_icon('i', sid),
         'sinkPoints': iv.get('resourceSinkPoints', 0),
         'isRaw': iv.get('category', '') == 'ore',  # refined below
     }
@@ -49,9 +58,13 @@ for bk, bv in B.items():
         'category': bv.get('category', ''),
         'power': bv.get('powerUsed', 0),
         'powerGenerated': bv.get('powerGenerated', 0),
-        'image': bv.get('image', ''),
+        'image': local_icon('b', sid),
         'beltSpeed': bv.get('beltSpeed'),
         'extractionRate': bv.get('extractionRate'),
+        # 物理入/出口数（原始 SCIM 字段）：Assembler input:2 output:1、Manufacturer input:4 output:1。
+        # 施工图入口数据优先用它（比按配方原料种类数推更准），游戏更新后重跑本脚本自动更新。
+        'input': bv.get('input'),
+        'output': bv.get('output'),
     }
 
 # Buildings we don't want as production machines (workbench/cart/quantum etc.)

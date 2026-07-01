@@ -21,7 +21,7 @@ Multica 项目: 「Better Satisfactory Planner」(MYW-43~48)
 ### 数据 schema (data.normalized.json)
 ```
 items{id, name, category, color, image, isRaw}
-buildings{id, name, power, image, beltSpeed, extractionRate}
+buildings{id, name, power, image, beltSpeed, extractionRate, input?, output?}   # input/output = 物理进/出料口数（Assembler 2/1、Manufacturer 4/1；缺省 null）
 recipes{id, name, machines[], duration(秒), ingredients{item:qty/周期}, produce{item:qty/周期}, isAlternate}
 producers{itemId: [recipeId...]}   # 反向索引：物品→能生产它的配方（替代配方筛选用）
 ```
