@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MAX_CLOCK, MIN_CLOCK } from '../../lib';
 import { setLang, useLang } from '../../i18n';
 import { usePlanner } from '../../store/plannerStore';
 
-/** 选项 Tab：语言、图表方向、信息详略、超频开关 + maxClock。 */
+/** 选项 Tab：分享、语言、图表方向、信息详略、超频开关 + maxClock。 */
 export default function OptionsTab() {
   const { t } = useTranslation();
   const lang = useLang();
+  const [copied, setCopied] = useState(false);
   const mode = usePlanner((s) => s.mode);
   const viewMode = usePlanner((s) => s.viewMode);
   const setViewMode = usePlanner((s) => s.setViewMode);
@@ -22,8 +24,27 @@ export default function OptionsTab() {
   const setMaxClock = usePlanner((s) => s.setMaxClock);
   const isBlueprint = viewMode === 'blueprint';
 
+  // 复制当前分享链接到剪贴板 + 短暂「已复制」反馈。
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* 剪贴板不可用（非安全上下文 / 拒绝授权）→ 静默忽略，避免打断操作 */
+    }
+  };
+
   return (
     <div className="panel__tab">
+      <section className="panel__section">
+        <h3 className="panel__section-title">{t('options.shareTitle')}</h3>
+        <button type="button" className="share-btn" onClick={handleShare}>
+          {copied ? t('options.shareCopied') : t('options.shareButton')}
+        </button>
+        <p className="panel__hint">{t('options.shareHint')}</p>
+      </section>
+
       <section className="panel__section">
         <h3 className="panel__section-title">{t('options.viewTitle')}</h3>
         <div className="seg">
