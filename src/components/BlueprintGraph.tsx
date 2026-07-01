@@ -15,7 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import type { GameData } from '../lib';
-import { gameData as defaultData } from '../lib';
+import { gameData as defaultData, BELTS } from '../lib';
 import { itemName, useLang } from '../i18n';
 import { beltColor, BELT_COLORS, type GraphResult } from './buildFlow';
 import { buildBlueprint } from './blueprintFlow';
@@ -61,6 +61,7 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
   }, [built.nodes, setNodes]);
 
   const plan = built.plan;
+  const maxBeltSpeed = BELTS[BELTS.length - 1].speed;
   const targetName = itemName(result.itemId, lang, data);
   const usedBeltMarks = new Set(plan.beltUsage.map((u) => u.mark));
   const beltLegend = Object.keys(BELT_COLORS).map((mark) => ({
@@ -85,7 +86,7 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
       colorMode="dark"
     >
       <Background variant={BackgroundVariant.Lines} gap={38} size={1} color="#2f333a" />
-      <Controls showInteractive={false} />
+      <Controls showInteractive />
       <MiniMap pannable zoomable nodeColor={miniMapColor} maskColor="rgba(20,22,26,0.7)" />
 
       <ReflowButton onReflow={handleReflow} padding={0.14} />
@@ -139,6 +140,17 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
             <span>{t('graph.blueprintMachines')}</span>
             <span>×{plan.totalMachines}</span>
           </div>
+          {plan.laneCount > 1 ? (
+            <>
+              <div className="sf-hud__row">
+                <span>{t('graph.blueprintLanes')}</span>
+                <span>×{plan.laneCount}</span>
+              </div>
+              <p className="sf-hud__note">
+                {t('graph.blueprintLanesNote', { count: plan.laneCount, speed: maxBeltSpeed })}
+              </p>
+            </>
+          ) : null}
           <div className="sf-hud__row">
             <span>
               {t('logistics.splitterGlyph')} {t('logistics.splitter')}

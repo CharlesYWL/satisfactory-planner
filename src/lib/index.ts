@@ -72,7 +72,7 @@ export type {
   LogisticsSummary,
   BeltUsage,
 } from './logistics';
-export { manifoldNodes, computeBlueprint } from './blueprint';
+export { manifoldNodes, lanesForFlow, laneMachineCount, computeBlueprint } from './blueprint';
 export type {
   BlueprintInput,
   BlueprintGroup,

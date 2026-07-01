@@ -120,7 +120,7 @@ export default function FlowGraph({
       colorMode="dark"
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#3a3e45" />
-      <Controls showInteractive={false} />
+      <Controls showInteractive />
       <MiniMap pannable zoomable nodeColor={miniMapColor} maskColor="rgba(20,22,26,0.7)" />
 
       <ReflowButton onReflow={handleReflow} padding={0.18} />

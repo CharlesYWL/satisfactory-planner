@@ -32,6 +32,27 @@ export function manifoldNodes(machines: number): number {
   return Math.floor(machines) - 1;
 }
 
+/**
+ * 某条带（主干/支路）在整段流量下需要几条并行满档带（每条 ≤ 单条最高档带速）。
+ * 例：MAX=1200 时 flow=2400 → 2；flow=1200 → 1；flow=0 → 1（至少一条）。
+ */
+export function lanesForFlow(flow: number, maxBelt = MAX_BELT_SPEED): number {
+  if (!Number.isFinite(flow) || flow <= 0 || maxBelt <= 0) return 1;
+  return Math.max(1, Math.ceil(flow / maxBelt - 1e-9));
+}
+
+/**
+ * 把 N 台机器**均分**到 `laneCount` 条并行产线，返回第 `k` 条（0-based）分到的台数。
+ * 余数摊给靠前的车道（前 `N % L` 条各 +1），保证各车道台数最多差 1、合计 = N。
+ * 对应 Q3「方案B」：整条子产线复制成 L 条并行线，每条一条满档带，车道对车道 1:1。
+ */
+export function laneMachineCount(total: number, laneCount: number, k: number): number {
+  const N = Math.max(0, Math.floor(total));
+  const L = Math.max(1, Math.floor(laneCount));
+  if (k < 0 || k >= L) return 0;
+  return Math.floor(N / L) + (k < N % L ? 1 : 0);
+}
+
 /** 施工图里一个机器组的「一种原料」输入 manifold 估算。 */
 export interface BlueprintInput {
   /** 流动的物品 itemId。 */
@@ -120,6 +141,12 @@ export interface BlueprintPlan {
   productItemId: string;
   /** 最终成品产出速率/min（底部对账用）。 */
   productRate: number;
+  /**
+   * 并行产线条数：全图任一条带的流量都能被 `laneCount` 条满档带承载
+   * （= 各组「输出主干 / 各输入主干」所需并行带数的最大值，≥1）。
+   * 渲染层据此把每个机器组均分成 L 条并行产线（每条一条 ≤ 最高档的带）。
+   */
+  laneCount: number;
   /** 全图机器总台数。 */
   totalMachines: number;
   /** 全图分离器合计。 */
@@ -157,6 +184,7 @@ export function computeBlueprint(
       groups: [],
       productItemId: '',
       productRate: 0,
+      laneCount: 1,
       totalMachines: 0,
       totalSplitters: 0,
       totalMergers: 0,
@@ -299,10 +327,18 @@ export function computeBlueprint(
 
   const beltUsage = [...usageMap.values()].sort((a, b) => a.speed - b.speed);
 
+  // 并行产线条数 = 全图任一条带所需并行满档带数的最大值（输出主干 + 各输入主干）。
+  let laneCount = 1;
+  for (const g of groups) {
+    laneCount = Math.max(laneCount, lanesForFlow(g.totalRate));
+    for (const inp of g.inputs) laneCount = Math.max(laneCount, lanesForFlow(inp.totalFlow));
+  }
+
   return {
     groups,
     productItemId: tree.itemId,
     productRate: rateOf(tree.itemId) ?? tree.rate,
+    laneCount,
     totalMachines,
     totalSplitters,
     totalMergers,

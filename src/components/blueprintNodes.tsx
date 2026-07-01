@@ -23,6 +23,31 @@ function Ports() {
 }
 
 /**
+ * 分离器/合并器专用「可旋转」handle：四个面各放一对 handle（入 `${side}i` / 出 `${side}o`），
+ * 让走线层能按产线布局给设备选进出方向（如「右进 → 左/下出」），减少线条交叉。
+ * handle 全透明（见 styles.css），重叠无视觉副作用；`nodesConnectable={false}` 下仅供程序化连线。
+ */
+const DEVICE_SIDES = [
+  { side: 'l', position: Position.Left },
+  { side: 't', position: Position.Top },
+  { side: 'r', position: Position.Right },
+  { side: 'b', position: Position.Bottom },
+] as const;
+
+function DevicePorts() {
+  return (
+    <>
+      {DEVICE_SIDES.map(({ side, position }) => (
+        <span key={side}>
+          <Handle id={`${side}i`} type="target" position={position} />
+          <Handle id={`${side}o`} type="source" position={position} />
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
  * 机器专用 handle：顶部按入料种类数放 N 个 target handle（`t0..t{k-1}`），横向均匀错开
  * （2 入口 = 25% / 75%，N 入口 = 每格中点），让不同物料的传送带各自落到自己的入口，
  * 不再合流到同一个中心点（对照 references/ref6 双入口手绘图）。左/右/底保留单 handle。
@@ -67,6 +92,8 @@ export type BpDeviceData = {
   beltColor: string;
   /** 该分支流量文本（可空）。 */
   branchText?: string;
+  /** 是否为共享输出主干的「沿途抽料」分离器（tooltip 追加 manifold 背压说明）。 */
+  manifold?: boolean;
 };
 
 /** 输入源（原矿 / 外部供给）卡片，位于一条输入主干最左端。 */
@@ -129,13 +156,16 @@ function BpDeviceImpl({ data }: NodeProps<BpDeviceNode>) {
   const isSplit = data.device === 'splitter';
   const glyph = isSplit ? t('logistics.splitterGlyph') : t('logistics.mergerGlyph');
   const label = isSplit ? t('logistics.splitter') : t('logistics.merger');
+  const tip = [label, data.branchText, data.manifold ? t('logistics.manifoldNote') : undefined]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <div
       className={`sf-bp-dev sf-bp-dev--${data.device}`}
-      title={data.branchText ? `${label} · ${data.branchText}` : label}
+      title={tip}
       style={{ borderColor: data.beltColor, ['--sf-belt-color' as string]: data.beltColor }}
     >
-      <Ports />
+      <DevicePorts />
       <span className="sf-bp-dev__glyph">{glyph}</span>
     </div>
   );
