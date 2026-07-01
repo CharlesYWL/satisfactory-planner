@@ -24,6 +24,7 @@ import type { GameData } from './types';
 import { gameData as defaultData } from './data';
 import { BELTS, suggestBelt, type Belt } from './rates';
 import type { TraceNode } from './trace';
+import { aggregateInputFlows } from './trace';
 
 /** Conveyor Splitter 出口数（1 进 3 出）。 */
 export const SPLITTER_FANOUT = 3;
@@ -159,6 +160,9 @@ export function computeLogistics(
 ): LogisticsSummary {
   const connections: LogisticsConnection[] = [];
   const visited = new Set<string>();
+  // 每条连接的流量取「源→目标 的全组总流量」，而不是首个目标节点那条支路的量。
+  // 同一物料被多个下游消费时树里会出现多个目标节点，各只带一条支路的 rate；聚合后才正确。
+  const inputFlowOf = aggregateInputFlows(tree);
 
   const walk = (node: TraceNode) => {
     if (visited.has(node.itemId)) return;
@@ -173,11 +177,12 @@ export function computeLogistics(
         input.kind === 'produced' ? Math.max(0, machineCountOf(input.itemId)) : 0;
       // 配方 ingredients 里一个键=一个进料口，故每台目标对该物料入口数为 1。
       const inputsPerTarget = recipe?.ingredients[input.itemId] != null ? 1 : 1;
+      const flow = inputFlowOf(node.itemId, input.itemId) ?? input.rate;
       connections.push(
         connectionLogistics({
           itemId: input.itemId,
           targetItemId: node.itemId,
-          flow: input.rate,
+          flow,
           sourceMachines,
           targetMachines,
           inputsPerTarget,
