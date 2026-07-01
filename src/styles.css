@@ -536,6 +536,28 @@ body {
   height: 16px;
 }
 
+/* share link button */
+.share-btn {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(255, 140, 0, 0.14);
+  border: 1px solid var(--sf-orange);
+  border-radius: 7px;
+  color: var(--sf-orange);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.share-btn:hover {
+  background: rgba(255, 140, 0, 0.22);
+}
+
+.share-btn:active {
+  background: rgba(255, 140, 0, 0.3);
+}
+
 /* recipe picker */
 .recipe-picker {
   display: flex;

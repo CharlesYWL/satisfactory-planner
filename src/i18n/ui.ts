@@ -85,6 +85,10 @@ export const resources = {
         languageTitle: '语言',
         languageZh: '中文',
         languageEn: 'English',
+        shareTitle: '分享方案',
+        shareButton: '复制分享链接',
+        shareCopied: '已复制到剪贴板',
+        shareHint: '把当前方案（目标 / 取向 / 产量 / 供给 / 配方 / 超频 / 视图 / 语言）编码进 URL，复制后发给别人即可完整还原；刷新也不丢。',
       },
       picker: {
         title: '选择目标产品',
@@ -250,6 +254,11 @@ export const resources = {
         languageTitle: 'Language',
         languageZh: '中文',
         languageEn: 'English',
+        shareTitle: 'Share plan',
+        shareButton: 'Copy share link',
+        shareCopied: 'Copied to clipboard',
+        shareHint:
+          'Encodes the current plan (target / mode / rate / supplies / recipes / overclock / view / language) into the URL — copy and send it and the whole plan is restored; survives refresh too.',
       },
       picker: {
         title: 'Pick target product',
