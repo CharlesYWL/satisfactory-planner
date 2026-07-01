@@ -12,7 +12,6 @@ import {
 const STATOR = 'Desc_Stator_C';
 const RIP = 'Desc_IronPlateReinforced_C';
 const STITCHED = 'Recipe_Alternate_ReinforcedIronPlate_2_C';
-
 const WIRING = 'Desc_SpaceElevatorPart_3_C'; // 自动路线 Automated Wiring
 const AUTOMATED_WIRING = 'Desc_SpaceElevatorPart_3_C';
 const WIRE = 'Desc_Wire_C';
