@@ -221,12 +221,13 @@ body {
 
 /* ---- HUD panels ---- */
 .sf-hud {
+  position: relative;
   background: rgba(28, 30, 34, 0.92);
   border: 1px solid var(--sf-border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: var(--sf-text);
-  font-size: 12px;
+  font-size: 11.5px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
 }
@@ -1346,4 +1347,112 @@ body {
   opacity: 0;
   width: 6px;
   height: 6px;
+}
+
+/* ==== MYW-53 面板折叠 / 瘦身 ==== */
+
+/* HUD 折叠按钮（展开态，右上角） */
+.sf-hud__collapse {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--sf-text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--sf-border);
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 2;
+}
+.sf-hud__collapse:hover {
+  color: var(--sf-text);
+  background: rgba(255, 140, 0, 0.16);
+  border-color: var(--sf-orange);
+}
+/* 给收起按钮让位，避免与首行标题重叠 */
+.sf-hud > .sf-hud__collapse + .sf-hud__label,
+.sf-hud > .sf-hud__collapse + .sf-hud__power-value {
+  padding-right: 22px;
+}
+
+/* HUD 收起后的小 chip 按钮 */
+.sf-hud--chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  cursor: pointer;
+}
+.sf-hud--chip:hover {
+  border-color: var(--sf-orange);
+  background: rgba(255, 140, 0, 0.16);
+}
+.sf-hud__chip-glyph {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--sf-orange);
+  font-weight: 800;
+}
+
+/* 右侧配置面板：收起按钮（放在 Tab 行末尾） */
+.panel__collapse-btn {
+  flex: none;
+  width: 34px;
+  border: none;
+  border-left: 1px solid var(--sf-border);
+  background: transparent;
+  color: var(--sf-text-dim);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.panel__collapse-btn:hover {
+  color: var(--sf-orange);
+  background: rgba(255, 140, 0, 0.08);
+}
+
+/* 右侧配置面板：收起后的窄边栏 + 展开把手 */
+.panel--collapsed {
+  width: 30px;
+  min-width: 30px;
+}
+.panel__handle {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sf-text-dim);
+  cursor: pointer;
+}
+.panel__handle:hover {
+  color: var(--sf-orange);
+  background: rgba(255, 140, 0, 0.06);
+}
+.panel__handle-arrow {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+.panel__handle-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
 }

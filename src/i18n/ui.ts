@@ -16,6 +16,12 @@ export const resources = {
       },
       panel: {
         tab: { output: '产出', input: '原料', options: '选项' },
+        collapse: '收起面板',
+        expand: '展开面板',
+      },
+      hud: {
+        collapse: '收起',
+        expand: '展开',
       },
       output: {
         modeTitle: '配平取向',
@@ -164,6 +170,12 @@ export const resources = {
       },
       panel: {
         tab: { output: 'Output', input: 'Inputs', options: 'Options' },
+        collapse: 'Collapse panel',
+        expand: 'Expand panel',
+      },
+      hud: {
+        collapse: 'Collapse',
+        expand: 'Expand',
       },
       output: {
         modeTitle: 'Balancing mode',

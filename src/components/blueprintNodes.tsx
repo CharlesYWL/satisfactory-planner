@@ -22,6 +22,31 @@ function Ports() {
   );
 }
 
+/**
+ * 机器专用 handle：顶部按入料种类数放 N 个 target handle（`t0..t{k-1}`），横向均匀错开
+ * （2 入口 = 25% / 75%，N 入口 = 每格中点），让不同物料的传送带各自落到自己的入口，
+ * 不再合流到同一个中心点（对照 references/ref6 双入口手绘图）。左/右/底保留单 handle。
+ */
+function MachinePorts({ inputCount }: { inputCount: number }) {
+  const k = Math.max(1, inputCount);
+  return (
+    <>
+      {Array.from({ length: k }, (_, j) => (
+        <Handle
+          key={j}
+          id={`t${j}`}
+          type="target"
+          position={Position.Top}
+          style={{ left: `${((j + 0.5) / k) * 100}%` }}
+        />
+      ))}
+      <Handle id="l" type="target" position={Position.Left} />
+      <Handle id="r" type="source" position={Position.Right} />
+      <Handle id="b" type="source" position={Position.Bottom} />
+    </>
+  );
+}
+
 /** 一台独立机器（阵列展开后的单体）。 */
 export type BpMachineData = {
   itemName: string;
@@ -31,6 +56,8 @@ export type BpMachineData = {
   index: number;
   /** 每台产量/min。 */
   perMachineRate: number;
+  /** 入料种类数（= 顶部 target handle 数量，用于双/多入口 offset 走线）。 */
+  inputCount: number;
   isProduct: boolean;
 };
 
@@ -81,7 +108,7 @@ function BpMachineImpl({ data }: NodeProps<BpMachineNode>) {
   )}/min`;
   return (
     <div className={cls} title={tip}>
-      <Ports />
+      <MachinePorts inputCount={data.inputCount} />
       <span className="sf-bp-machine__idx">#{data.index}</span>
       <div className="sf-bp-machine__icon">
         {data.machineImage ? <img src={data.machineImage} alt={data.machineName} /> : null}

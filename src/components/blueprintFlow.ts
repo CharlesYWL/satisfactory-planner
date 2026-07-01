@@ -31,6 +31,14 @@ const SRC_X = 44;
 
 const centerX = (i: number) => GX + i * MACHINE_DX + MACHINE_W / 2;
 
+/**
+ * 第 j 种入料（共 count 种）在机器顶部入口相对机器中心的横向偏移（px）。
+ * 与 blueprintNodes.MachinePorts 的 handle 位置一致：单入口居中(0)，多入口均匀错开
+ * （2 入口 = ±1/4 机宽）。用来把该物料的分离器主干整体平移到入口正上方，走竖直落线。
+ */
+const portOffset = (j: number, count: number) =>
+  count <= 1 ? 0 : ((j + 0.5) / count - 0.5) * MACHINE_W;
+
 interface EdgeOpts {
   color: string;
   label?: string;
@@ -117,6 +125,7 @@ export function buildBlueprint(
           machineImage: building?.image ?? '',
           index: i + 1,
           perMachineRate: g.perMachineRate,
+          inputCount: k,
           isProduct: g.isProduct,
         },
       };
@@ -128,8 +137,12 @@ export function buildBlueprint(
       const beltY = bandTop + j * BELT_ROW_H;
       const color = beltColor(inp.belt.mark);
       const producedHere = inp.produced && groupIds.has(inp.itemId);
-      // 主干入口的目标端：N≥2 → 第一个分离器左侧；N=1 → 机器顶部。
-      const firstTarget = N >= 2 ? { id: `s:${g.itemId}:${inp.itemId}:0`, h: 'l' } : { id: `m:${g.itemId}:0`, h: 't' };
+      // 该物料在机器顶部的专属入口 handle + 主干整体横向偏移（让线竖直落到自己的入口）。
+      const inHandle = `t${j}`;
+      const offX = portOffset(j, k);
+      // 主干入口的目标端：N≥2 → 第一个分离器左侧；N=1 → 机器该物料的入口 handle。
+      const firstTarget =
+        N >= 2 ? { id: `s:${g.itemId}:${inp.itemId}:0`, h: 'l' } : { id: `m:${g.itemId}:0`, h: inHandle };
 
       // 入口边：来自上游机器组的输出端点（跨带）或本地原料/供给源卡片。
       if (producedHere) {
@@ -187,20 +200,20 @@ export function buildBlueprint(
         const devNode: BpDeviceNode = {
           id: `s:${g.itemId}:${inp.itemId}:${i}`,
           type: 'bpDevice',
-          position: { x: centerX(i) - DEV / 2, y: beltY },
+          position: { x: centerX(i) + offX - DEV / 2, y: beltY },
           width: DEV,
           height: DEV,
           data: { device: 'splitter', beltColor: color, branchText: tapLabel },
         };
         nodes.push(devNode);
-        // 抽一台：分离器 → 该台机器顶部。
+        // 抽一台：分离器 → 该台机器该物料的入口 handle（竖直落线）。
         edges.push(
           makeEdge(
             `stap:${g.itemId}:${inp.itemId}:${i}`,
             devNode.id,
             'b',
             `m:${g.itemId}:${i}`,
-            't',
+            inHandle,
             { color, label: tapLabel, arrow: true },
           ),
         );
@@ -223,7 +236,7 @@ export function buildBlueprint(
               devNode.id,
               'r',
               `m:${g.itemId}:${N - 1}`,
-              't',
+              inHandle,
               { color, label: tapLabel, arrow: true },
             ),
           );
