@@ -2,6 +2,8 @@
 
 > 《幸福工厂 / Satisfactory》生产线配平计算器 —— **双向配平** + **施工图级走线**，为新手而生。
 
+**🌐 在线体验: <https://satisfactory-planner-dsq.pages.dev/>**
+
 对标 [satisfactory-calculator](https://satisfactory-calculator.com/)，但补上了它最欠缺的东西：不仅告诉你「要多少台机器」，还画出**照着就能搭**的施工图（哪台机器、走几级传送带、分离器/合并器接到哪）。
 
 纯前端单页应用，游戏数据打包进包内，**完全离线可用**。
@@ -48,7 +50,7 @@ npm test         # 单测 (vitest, 47 项)
 npm run build    # 类型检查 + 生产构建
 ```
 
-纯静态，`npm run build` 产物可直接部署到任意静态托管（GitHub Pages / Vercel / Nginx / …）。
+纯静态，`npm run build` 产物可直接部署到任意静态托管。已部署在 **Cloudflare Pages** → <https://satisfactory-planner-dsq.pages.dev/>
 
 ---
 
@@ -148,7 +150,7 @@ Multica 项目「Better Satisfactory Planner」全部里程碑 + 改进已完成
 - [x] 图片网格选品 · i18next 中英双语
 - [x] 施工图视图（机器阵列 + manifold 走线 + 传送带分级）
 - [x] 装配站多入口 offset 走线 + 面板可折叠
-- [ ] 部署（可选，待定 GitHub Pages / 自托管）
+- [x] 部署 —— Cloudflare Pages: <https://satisfactory-planner-dsq.pages.dev/>
 
 ---
 
