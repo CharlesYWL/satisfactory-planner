@@ -76,5 +76,6 @@ export { manifoldNodes, computeBlueprint } from './blueprint';
 export type {
   BlueprintInput,
   BlueprintGroup,
+  BlueprintTap,
   BlueprintPlan,
 } from './blueprint';

@@ -54,6 +54,27 @@ export interface BlueprintInput {
   kind: InputKind;
 }
 
+/**
+ * 输出主干上的一个「沿途抽料点」（tap）：把 `flow` 从共享主干抽给某个自产下游，
+ * 抽走后主干剩 `remaining`。对照游戏里「一条主干沿途按需求分流」的真实物流。
+ */
+export interface BlueprintTap {
+  /** 下游消费方物品 itemId（消费该产物的机器组）。 */
+  targetItemId: string;
+  /** 从主干抽给该下游的流量/min。 */
+  flow: number;
+  /** 抽走本股后主干剩余流量/min（最后一个下游后为 0）。 */
+  remaining: number;
+  /** 该抽料支路建议带级（按支路流量）。 */
+  belt: Belt;
+  /** 支路流量是否超单条最高档带速。 */
+  overBelt: boolean;
+  /** 支路满足流量所需并行带条数。 */
+  beltCount: number;
+  /** 是否为主干尾料（最后一个下游，直接吃主干剩余，无需独立分离器）。 */
+  isTail: boolean;
+}
+
 /** 施工图里一个机器组（某物品的全部机器）。 */
 export interface BlueprintGroup {
   /** 该组产出的物品 itemId。 */
@@ -78,6 +99,15 @@ export interface BlueprintGroup {
   outputOverBelt: boolean;
   /** 输出主干所需并行带条数。 */
   outputBeltCount: number;
+  /**
+   * 输出分流主干：该组产物被哪些自产下游、按什么流量沿共享主干「沿途抽料」。
+   * 按下游需求降序排列（尾料给最后一个）。语义：
+   *  - 空数组 = 无自产下游（最终成品，或产物只被原料/供给消费的罕见情形）。
+   *  - 长度 1 = 单下游，直连（渲染不引入分流节点）。
+   *  - 长度 ≥ 2 = 共享主干 + N-1 个分离器沿途 tap，最后一个吃尾料。
+   * 主干起点流量 = totalRate；抽料后每段剩余记在对应 tap 的 remaining 上。
+   */
+  outputTaps: BlueprintTap[];
   /** 距根节点的最长距离（用于排布：越大越靠上游 → 画在越上方）。 */
   depth: number;
 }
@@ -222,7 +252,45 @@ export function computeBlueprint(
       outputBelt: ob.belt,
       outputOverBelt: ob.overBelt,
       outputBeltCount: ob.beltCount,
+      outputTaps: [],
       depth: depth.get(itemId) ?? 0,
+    });
+  }
+
+  // 3) 输出分流主干：为每个自产物品收集其所有自产下游消费连接（target + flow），
+  //    按需求降序沿共享主干「沿途抽料」（先给需求大的下游，尾料给最后一个）。
+  //    这是「共享输出主干 + 沿途分流」建模，替代「每个消费方各自独立源」的旧画法。
+  for (const g of groups) {
+    // 消费 g.itemId 的所有下游机器组（other 组的输入里含本产物且为自产）。
+    const consumers: { targetItemId: string; flow: number }[] = [];
+    for (const other of groups) {
+      for (const inp of other.inputs) {
+        if (inp.produced && inp.itemId === g.itemId) {
+          consumers.push({ targetItemId: other.itemId, flow: inp.totalFlow });
+        }
+      }
+    }
+    // 按需求降序（稳定：同量按 itemId 升序），生成沿途 tap。
+    consumers.sort(
+      (a, b) => b.flow - a.flow || a.targetItemId.localeCompare(b.targetItemId),
+    );
+    let backbone = g.totalRate;
+    g.outputTaps = consumers.map((c, idx) => {
+      const isTail = idx === consumers.length - 1;
+      // 非尾料按下游真实需求抽料；尾料吃主干剩余（保证与主干总产对账、对 Bug1 更稳健）。
+      const flow = isTail ? Math.max(0, backbone) : c.flow;
+      const remaining = Math.max(0, backbone - flow);
+      const b = beltFor(flow);
+      backbone = remaining;
+      return {
+        targetItemId: c.targetItemId,
+        flow,
+        remaining,
+        belt: b.belt,
+        overBelt: b.overBelt,
+        beltCount: b.beltCount,
+        isTail,
+      };
     });
   }
 
