@@ -1,6 +1,6 @@
 import { MarkerType, type Edge } from '@xyflow/react';
-import type { BlueprintPlan, GameData } from '../lib';
-import { gameData as defaultData, computeBlueprint } from '../lib';
+import type { BlueprintGroup, BlueprintPlan, GameData } from '../lib';
+import { gameData as defaultData, computeBlueprint, suggestBelt } from '../lib';
 import { itemName as itemLabel, buildingName as buildingLabel, type Lang } from '../i18n';
 import { beltColor, type GraphResult } from './buildFlow';
 import { formatRate } from './nodes';
@@ -30,6 +30,22 @@ const GX = 260; // 机器阵列左起点 x（左侧留给原料源卡片）
 const SRC_X = 44;
 
 const centerX = (i: number) => GX + i * MACHINE_DX + MACHINE_W / 2;
+
+/* ---- 输出分流主干（共享主干沿途 tap）几何 ---- */
+const TAP_DX = 90; // 相邻 tap 分离器水平间距
+
+/**
+ * 某下游机器组消费某产物时的「输入 manifold 入口」（node + handle）。
+ * 与 buildBlueprint 输入循环里 `firstTarget` 的算法一致：
+ *  - 组内 ≥2 台机器 → 该物料输入 manifold 首个分离器左端口 `s:<组>:<料>:0` 'l'；
+ *  - 单台机器 → 该台机器顶部该物料专属入口 `m:<组>:0` 't{j}'（j = 料在该组 inputs 的序号）。
+ * 用于把上游共享主干的抽料支路直接落到下游 manifold 头部。
+ */
+function consumerEntry(consumer: BlueprintGroup, itemId: string): { id: string; h: string } {
+  const j = Math.max(0, consumer.inputs.findIndex((inp) => inp.itemId === itemId));
+  if (consumer.machineCount >= 2) return { id: `s:${consumer.itemId}:${itemId}:0`, h: 'l' };
+  return { id: `m:${consumer.itemId}:0`, h: `t${j}` };
+}
 
 /**
  * 第 j 种入料（共 count 种）在机器顶部入口相对机器中心的横向偏移（px）。
@@ -99,6 +115,7 @@ export function buildBlueprint(
   const nodes: BpFlowNode[] = [];
   const edges: Edge[] = [];
   const groupIds = new Set(plan.groups.map((g) => g.itemId));
+  const byItemGroup = new Map(plan.groups.map((g) => [g.itemId, g]));
 
   let y = 40;
 
@@ -154,23 +171,10 @@ export function buildBlueprint(
 
       // 入口边：来自上游机器组的输出端点（跨带）或本地原料/供给源卡片。
       if (producedHere) {
-        edges.push(
-          makeEdge(
-            `bpin:${g.itemId}:${inp.itemId}`,
-            `out:${inp.itemId}`,
-            'b',
-            firstTarget.id,
-            firstTarget.h,
-            {
-              color,
-              label: `${formatRate(inp.totalFlow)}/min`,
-              beltMark: inp.belt.mark,
-              overBelt: inp.overBelt,
-              beltCount: inp.beltCount,
-              arrow: true,
-            },
-          ),
-        );
+        // 自产上游：入口边由上游组的「输出分流主干」统一绘制（共享主干沿途 tap
+        // → 本组 manifold 头部），此处不再从 out:<料> 单独引一条独立源，
+        // 避免把「一条主干分流」画成「多个独立源」。firstTarget 已按同一算法
+        // 由 consumerEntry() 在上游侧复现。
       } else {
         const srcNode: BpSourceNode = {
           id: `src:${g.itemId}:${inp.itemId}`,
@@ -253,10 +257,11 @@ export function buildBlueprint(
     });
 
     // --- 输出 manifold：各台机器 → 合并器级联 → 输出端点 ---
+    const outXpos = GX + (N - 1) * MACHINE_DX + MACHINE_W + 52;
     const outNode: BpOutNode = {
       id: `out:${g.itemId}`,
       type: 'bpOut',
-      position: { x: GX + (N - 1) * MACHINE_DX + MACHINE_W + 52, y: outY + DEV / 2 - OUT_H / 2 },
+      position: { x: outXpos, y: outY + DEV / 2 - OUT_H / 2 },
       width: OUT_W,
       height: OUT_H,
       data: {
@@ -330,6 +335,107 @@ export function buildBlueprint(
           label: perOut,
         }),
       );
+    }
+
+    // --- 输出分流主干：产物被多个下游消费时，从共享主干沿途 tap 到各下游 ---
+    // 单下游 → 直连（不引入分流节点）；≥2 下游 → 主干接 N-1 个分离器，
+    // 每个分离器抽走一股给对应下游，尾料给最后一个下游。跨组落到下游 manifold 头部。
+    const taps = g.outputTaps;
+    if (taps.length === 1) {
+      const t0 = taps[0];
+      const target = byItemGroup.get(t0.targetItemId);
+      if (target) {
+        const entry = consumerEntry(target, g.itemId);
+        edges.push(
+          makeEdge(`bpin:${t0.targetItemId}:${g.itemId}`, outNode.id, 'b', entry.id, entry.h, {
+            color: beltColor(t0.belt.mark),
+            label: `${formatRate(t0.flow)}/min`,
+            beltMark: t0.belt.mark,
+            overBelt: t0.overBelt,
+            beltCount: t0.beltCount,
+            arrow: true,
+          }),
+        );
+      }
+    } else if (taps.length >= 2) {
+      const tapBaseX = outXpos + OUT_W + 44;
+      const lastSplit = taps.length - 2; // 最后一个分离器索引（尾料下游不占分离器）
+      for (let i = 0; i <= lastSplit; i++) {
+        const tp = taps[i];
+        const branchColor = beltColor(tp.belt.mark);
+        const devNode: BpDeviceNode = {
+          id: `d:${g.itemId}:${i}`,
+          type: 'bpDevice',
+          position: { x: tapBaseX + i * TAP_DX, y: outY },
+          width: DEV,
+          height: DEV,
+          data: {
+            device: 'splitter',
+            beltColor: branchColor,
+            branchText: `${formatRate(tp.flow)}/min`,
+          },
+        };
+        nodes.push(devNode);
+
+        // 主干进料：out 端点 → 首个分离器（标主干总产）；否则上一个分离器续接（标剩余）。
+        if (i === 0) {
+          edges.push(
+            makeEdge(`dtrunk:${g.itemId}`, outNode.id, 'b', devNode.id, 'l', {
+              color: outColor,
+              label: `${formatRate(g.totalRate)}/min`,
+              beltMark: g.outputBelt.mark,
+              overBelt: g.outputOverBelt,
+              beltCount: g.outputBeltCount,
+              arrow: true,
+            }),
+          );
+        } else {
+          const prevRemaining = taps[i - 1].remaining;
+          const contBelt = suggestBelt(prevRemaining);
+          edges.push(
+            makeEdge(`dcont:${g.itemId}:${i}`, `d:${g.itemId}:${i - 1}`, 'r', devNode.id, 'l', {
+              color: beltColor(contBelt.mark),
+              label: `${formatRate(prevRemaining)}/min`,
+              beltMark: contBelt.mark,
+            }),
+          );
+        }
+
+        // 抽料支路：分离器 → 该下游输入 manifold 头部。
+        const target = byItemGroup.get(tp.targetItemId);
+        if (target) {
+          const entry = consumerEntry(target, g.itemId);
+          edges.push(
+            makeEdge(`dtap:${g.itemId}:${tp.targetItemId}`, devNode.id, 'b', entry.id, entry.h, {
+              color: branchColor,
+              label: `${formatRate(tp.flow)}/min`,
+              beltMark: tp.belt.mark,
+              overBelt: tp.overBelt,
+              beltCount: tp.beltCount,
+              arrow: true,
+            }),
+          );
+        }
+
+        // 尾料：最后一个分离器的续接口 → 最后一个下游（吃主干剩余）。
+        if (i === lastSplit) {
+          const tail = taps[taps.length - 1];
+          const tailTarget = byItemGroup.get(tail.targetItemId);
+          if (tailTarget) {
+            const entry = consumerEntry(tailTarget, g.itemId);
+            edges.push(
+              makeEdge(`dtail:${g.itemId}:${tail.targetItemId}`, devNode.id, 'r', entry.id, entry.h, {
+                color: beltColor(tail.belt.mark),
+                label: `${formatRate(tail.flow)}/min`,
+                beltMark: tail.belt.mark,
+                overBelt: tail.overBelt,
+                beltCount: tail.beltCount,
+                arrow: true,
+              }),
+            );
+          }
+        }
+      }
     }
 
     y = outY + DEV + BAND_GAP;

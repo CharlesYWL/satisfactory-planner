@@ -11,6 +11,10 @@ import {
 const STATOR = 'Desc_Stator_C';
 const RIP = 'Desc_IronPlateReinforced_C';
 const STITCHED = 'Recipe_Alternate_ReinforcedIronPlate_2_C';
+const AUTOMATED_WIRING = 'Desc_SpaceElevatorPart_3_C';
+const WIRE = 'Desc_Wire_C';
+const CABLE = 'Desc_Cable_C';
+const COPPER_INGOT = 'Desc_CopperIngot_C';
 
 /** 用反向配平结果构造 machineCountOf / rateOf 查询器。 */
 function reverseLookups(itemId: string, rate: number, overrides = {}) {
@@ -121,5 +125,83 @@ describe('computeBlueprint 施工图计算', () => {
     // 带速升序。
     const speeds = plan.beltUsage.map((u) => u.speed);
     expect([...speeds].sort((a, b) => a - b)).toEqual(speeds);
+  });
+});
+
+describe('computeBlueprint 输出分流主干（共享主干沿途 tap）', () => {
+  // 正向 Charles 例子：自动路线 5/min → 电线 240 主干，Cable 抽 200、Stator 抽 40。
+  const auto = () => {
+    const { r, machineCountOf, rateOf } = reverseLookups(AUTOMATED_WIRING, 5);
+    const plan = computeBlueprint(r.tree, machineCountOf, rateOf);
+    const byItem = new Map(plan.groups.map((g) => [g.itemId, g]));
+    return { plan, byItem };
+  };
+
+  it('电线 240 主干：Cable 200 + Stator 40，尾料给需求小的一方', () => {
+    const { byItem } = auto();
+    const wire = byItem.get(WIRE)!;
+    // 主干起点 = 该组总产。
+    expect(wire.totalRate).toBeCloseTo(240, 6);
+    // 两个下游 → 两个 tap（=下游数）。
+    expect(wire.outputTaps.length).toBe(2);
+
+    // 按需求降序：Cable(200) 在前、Stator(40) 尾料在后。
+    const [first, tail] = wire.outputTaps;
+    expect(first.targetItemId).toBe(CABLE);
+    expect(first.flow).toBeCloseTo(200, 6);
+    expect(first.isTail).toBe(false);
+    // 抽 200 后主干剩 40。
+    expect(first.remaining).toBeCloseTo(40, 6);
+
+    expect(tail.targetItemId).toBe(STATOR);
+    expect(tail.flow).toBeCloseTo(40, 6);
+    expect(tail.isTail).toBe(true);
+    expect(tail.remaining).toBeCloseTo(0, 6);
+
+    // 抽料合计 = 主干总产（沿途分流守恒）。
+    const dealt = wire.outputTaps.reduce((s, t) => s + t.flow, 0);
+    expect(dealt).toBeCloseTo(wire.totalRate, 6);
+    // 分离器数 = 下游数 - 1（尾料下游不占分离器）。
+    expect(wire.outputTaps.filter((t) => !t.isTail).length).toBe(wire.outputTaps.length - 1);
+  });
+
+  it('单下游产物（Cable→自动路线）保持直连：一个 tap 且吃全部主干', () => {
+    const { byItem } = auto();
+    const cable = byItem.get(CABLE)!;
+    expect(cable.outputTaps.length).toBe(1);
+    const only = cable.outputTaps[0];
+    expect(only.targetItemId).toBe(AUTOMATED_WIRING);
+    expect(only.isTail).toBe(true);
+    // 单下游 → 抽走全部主干（= 总产），无剩余。
+    expect(only.flow).toBeCloseTo(cable.totalRate, 6);
+    expect(only.remaining).toBeCloseTo(0, 6);
+  });
+
+  it('铜锭单下游（→电线）即便上游输入被低估也按总产抽走全部主干', () => {
+    const { byItem } = auto();
+    const copper = byItem.get(COPPER_INGOT)!;
+    expect(copper.outputTaps.length).toBe(1);
+    // 尾料吃主干剩余 = 总产（对 Bug1 的输入低估更稳健，仍显示 120）。
+    expect(copper.outputTaps[0].targetItemId).toBe(WIRE);
+    expect(copper.outputTaps[0].flow).toBeCloseTo(copper.totalRate, 6);
+  });
+
+  it('最终成品无自产下游 → 输出分流主干为空', () => {
+    const { byItem } = auto();
+    const product = byItem.get(AUTOMATED_WIRING)!;
+    expect(product.isProduct).toBe(true);
+    expect(product.outputTaps).toEqual([]);
+  });
+
+  it('多下游 tap 的主干剩余严格递减且非负，尾料剩余为 0', () => {
+    const { byItem } = auto();
+    const wire = byItem.get(WIRE)!;
+    let prev = wire.totalRate;
+    for (const t of wire.outputTaps) {
+      expect(t.remaining).toBeLessThan(prev + 1e-9);
+      expect(t.remaining).toBeGreaterThanOrEqual(-1e-9);
+      prev = t.remaining;
+    }
+    expect(wire.outputTaps[wire.outputTaps.length - 1].remaining).toBeCloseTo(0, 6);
   });
 });
