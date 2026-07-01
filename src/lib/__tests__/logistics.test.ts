@@ -4,6 +4,7 @@ import {
   mergersForInputs,
   connectionLogistics,
   computeLogistics,
+  balanceForward,
   balanceReverse,
   traceProduction,
   MAX_BELT_SPEED,
@@ -12,6 +13,11 @@ import {
 const STATOR = 'Desc_Stator_C';
 const WIRE = 'Desc_Wire_C';
 const STEEL_PIPE = 'Desc_SteelPipe_C';
+
+const WIRING = 'Desc_SpaceElevatorPart_3_C'; // 自动路线 Automated Wiring
+const COPPER_INGOT = 'Desc_CopperIngot_C';
+const ORE_COPPER = 'Desc_OreCopper_C';
+const CABLE = 'Desc_Cable_C';
 
 describe('splittersForOutputs / mergersForInputs 拓扑节点数', () => {
   it('分离器：1→3，net +2 出口/个 → ceil((P-1)/2)', () => {
@@ -176,5 +182,33 @@ describe('computeLogistics 整树汇总', () => {
     const rawConns = summary.connections.filter((c) => c.rawSource);
     expect(rawConns.length).toBeGreaterThan(0);
     for (const c of rawConns) expect(c.mergers).toBe(0);
+  });
+
+  it('多消费者：连接流量按 源→目标 全组总流量，而非单条支路（Bug 修复）', () => {
+    // 正向 / 自动路线 / 铜矿石 120 / 有钢管：铜锭、线材都被多处消费。
+    const forward = balanceForward(
+      WIRING,
+      { [ORE_COPPER]: 120, [STEEL_PIPE]: 1000 },
+      { mode: 'integer' },
+    );
+    const byItem = new Map(forward.nodes.map((n) => [n.itemId, n]));
+    const machineCountOf = (id: string) => byItem.get(id)?.machineCount ?? 0;
+    const trace = traceProduction(WIRING, forward.targetOutput, {
+      supplies: new Set([ORE_COPPER, STEEL_PIPE]),
+    });
+    const summary = computeLogistics(trace.root, machineCountOf);
+    const flowOf = (item: string, target: string) =>
+      summary.connections.find((c) => c.itemId === item && c.targetItemId === target)?.flow;
+
+    // 修复前这两条都是 20；修复后应为全组总流量 120。
+    expect(flowOf(ORE_COPPER, COPPER_INGOT)).toBeCloseTo(120, 6);
+    expect(flowOf(COPPER_INGOT, WIRE)).toBeCloseTo(120, 6);
+
+    // 线材被电缆 + 定子两处消费 → 两条独立连接，各自是该连接的真实总量。
+    const wireToCable = flowOf(WIRE, CABLE)!;
+    const wireToStator = flowOf(WIRE, STATOR)!;
+    expect(wireToCable).toBeCloseTo(200, 6);
+    expect(wireToStator).toBeCloseTo(40, 6);
+    expect(wireToCable + wireToStator).toBeCloseTo(240, 6); // = 线材总产量
   });
 });

@@ -36,7 +36,7 @@ export type {
   RelevantRecipes,
   RelevantRecipesOptions,
 } from './recipes';
-export { traceProduction } from './trace';
+export { traceProduction, aggregateInputFlows } from './trace';
 export type {
   TraceNode,
   TraceInput,
