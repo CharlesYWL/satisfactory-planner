@@ -51,6 +51,13 @@ export const resources = {
         bottleneckHint: '{{items}} 限制了产量。',
       },
       options: {
+        viewTitle: '画布视图',
+        viewTopology: '拓扑图',
+        viewBlueprint: '施工图',
+        viewHintTopology: '抽象「组对组」拓扑：机器折叠 xN、贝塞尔曲线，看全局配平。',
+        viewHintBlueprint:
+          '施工图：每台机器单独展开 + manifold 主干供料（主干→分离器→各机器）+ 直角走线，照着能搭。',
+        topologyOnlyHint: '该选项仅作用于拓扑图视图。',
         directionTitle: '图表方向',
         directionLR: '左右 LR',
         directionTB: '上下 TB',
@@ -107,6 +114,10 @@ export const resources = {
       },
       graph: {
         targetLine: '目标产线',
+        blueprintTitle: '施工图 · 目标产线',
+        blueprintNote: '每台机器单独展开，主干经分离器(分)逐台供料，产物经合并器(合)汇流。',
+        blueprintReconcile: '成品对账',
+        blueprintMachines: '机器总数',
         totalPower: '总功耗',
         machinePower: '机器功耗（按类型）',
         rawDemand: '原矿需求',
@@ -191,6 +202,14 @@ export const resources = {
         bottleneckHint: '{{items}} limit the output.',
       },
       options: {
+        viewTitle: 'Canvas view',
+        viewTopology: 'Topology',
+        viewBlueprint: 'Blueprint',
+        viewHintTopology:
+          'Abstract group-to-group topology: machines folded ×N, Bézier curves — good for overall balancing.',
+        viewHintBlueprint:
+          'Blueprint: every machine expanded + manifold feeding (main → splitters → machines) + right-angle routing — build it as drawn.',
+        topologyOnlyHint: 'This option only affects the topology view.',
         directionTitle: 'Graph direction',
         directionLR: 'Left→Right',
         directionTB: 'Top→Bottom',
@@ -249,6 +268,11 @@ export const resources = {
       },
       graph: {
         targetLine: 'Target line',
+        blueprintTitle: 'Blueprint · target line',
+        blueprintNote:
+          'Every machine drawn separately; the main belt feeds each machine via splitters (S), outputs merge (M).',
+        blueprintReconcile: 'Output reconcile',
+        blueprintMachines: 'Total machines',
         totalPower: 'Total power',
         machinePower: 'Machine power (by type)',
         rawDemand: 'Raw needs',

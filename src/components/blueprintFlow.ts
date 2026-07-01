@@ -1,0 +1,318 @@
+import { MarkerType, type Edge } from '@xyflow/react';
+import type { BlueprintPlan, GameData } from '../lib';
+import { gameData as defaultData, computeBlueprint } from '../lib';
+import { itemName as itemLabel, buildingName as buildingLabel, type Lang } from '../i18n';
+import { beltColor, type GraphResult } from './buildFlow';
+import { formatRate } from './nodes';
+import type {
+  BpDeviceNode,
+  BpFlowNode,
+  BpMachineNode,
+  BpOutNode,
+  BpSourceNode,
+} from './blueprintNodes';
+import type { BpEdge, BpEdgeData } from './blueprintEdges';
+
+/* ---- 施工图几何常量（手工网格布局，让机器阵列对齐、走线成直角） ---- */
+const MACHINE_W = 150;
+const MACHINE_H = 92;
+const MACHINE_DX = 214; // 相邻机器水平间距
+const DEV = 46; // 分离器/合并器方块边长
+const SOURCE_W = 158;
+const SOURCE_H = 60;
+const OUT_W = 162;
+const OUT_H = 64;
+const BELT_ROW_H = 76; // 每条输入主干占的行高（机器上方逐层堆叠）
+const HEAD_PAD = 10;
+const FOOT_GAP = 68; // 机器底 → 输出主干
+const BAND_GAP = 82; // 相邻机器组之间的留白
+const GX = 260; // 机器阵列左起点 x（左侧留给原料源卡片）
+const SRC_X = 44;
+
+const centerX = (i: number) => GX + i * MACHINE_DX + MACHINE_W / 2;
+
+interface EdgeOpts {
+  color: string;
+  label?: string;
+  beltMark?: string;
+  overBelt?: boolean;
+  beltCount?: number;
+  arrow?: boolean;
+}
+
+function makeEdge(
+  id: string,
+  source: string,
+  sourceHandle: string,
+  target: string,
+  targetHandle: string,
+  opts: EdgeOpts,
+): BpEdge {
+  const data: BpEdgeData = {
+    color: opts.color,
+    label: opts.label,
+    beltMark: opts.beltMark,
+    overBelt: opts.overBelt,
+    beltCount: opts.beltCount,
+  };
+  return {
+    id,
+    source,
+    sourceHandle,
+    target,
+    targetHandle,
+    type: 'bpEdge',
+    animated: true,
+    data,
+    style: { stroke: opts.color, strokeWidth: 3 },
+    markerEnd: opts.arrow
+      ? { type: MarkerType.ArrowClosed, color: opts.color, width: 16, height: 16 }
+      : undefined,
+  };
+}
+
+/**
+ * 把配平结果渲染成「施工图」：每个机器组展开成 N 台独立机器阵列，
+ * 每种原料一条 manifold 主干（主干 → 分离器级联 → 各台机器），产物侧合并器汇流，
+ * 全部用 90° 直角边。返回 React Flow 的 nodes / edges 与计算所得的 plan（供 HUD 用）。
+ */
+export function buildBlueprint(
+  result: GraphResult,
+  data: GameData = defaultData,
+  lang: Lang = 'en',
+): { nodes: BpFlowNode[]; edges: Edge[]; plan: BlueprintPlan } {
+  const byItem = new Map(result.machines.map((m) => [m.itemId, m]));
+  const plan = computeBlueprint(
+    result.tree,
+    (id) => byItem.get(id)?.machineCountInteger ?? 0,
+    (id) => byItem.get(id)?.rate,
+  );
+
+  const nodes: BpFlowNode[] = [];
+  const edges: Edge[] = [];
+  const groupIds = new Set(plan.groups.map((g) => g.itemId));
+
+  let y = 40;
+
+  for (const g of plan.groups) {
+    const N = g.machineCount;
+    const k = g.inputs.length;
+    const bandTop = y;
+    const machineY = bandTop + k * BELT_ROW_H + HEAD_PAD;
+    const outY = machineY + MACHINE_H + FOOT_GAP;
+    const building = data.buildings[g.machineId];
+    const machineName = buildingLabel(g.machineId, lang, data);
+
+    // --- 机器阵列 ---
+    for (let i = 0; i < N; i++) {
+      const node: BpMachineNode = {
+        id: `m:${g.itemId}:${i}`,
+        type: 'bpMachine',
+        position: { x: GX + i * MACHINE_DX, y: machineY },
+        width: MACHINE_W,
+        height: MACHINE_H,
+        data: {
+          itemName: itemLabel(g.itemId, lang, data),
+          machineName,
+          machineImage: building?.image ?? '',
+          index: i + 1,
+          perMachineRate: g.perMachineRate,
+          isProduct: g.isProduct,
+        },
+      };
+      nodes.push(node);
+    }
+
+    // --- 每种原料一条输入 manifold ---
+    g.inputs.forEach((inp, j) => {
+      const beltY = bandTop + j * BELT_ROW_H;
+      const color = beltColor(inp.belt.mark);
+      const producedHere = inp.produced && groupIds.has(inp.itemId);
+      // 主干入口的目标端：N≥2 → 第一个分离器左侧；N=1 → 机器顶部。
+      const firstTarget = N >= 2 ? { id: `s:${g.itemId}:${inp.itemId}:0`, h: 'l' } : { id: `m:${g.itemId}:0`, h: 't' };
+
+      // 入口边：来自上游机器组的输出端点（跨带）或本地原料/供给源卡片。
+      if (producedHere) {
+        edges.push(
+          makeEdge(
+            `bpin:${g.itemId}:${inp.itemId}`,
+            `out:${inp.itemId}`,
+            'b',
+            firstTarget.id,
+            firstTarget.h,
+            {
+              color,
+              label: `${formatRate(inp.totalFlow)}/min`,
+              beltMark: inp.belt.mark,
+              overBelt: inp.overBelt,
+              beltCount: inp.beltCount,
+              arrow: true,
+            },
+          ),
+        );
+      } else {
+        const srcNode: BpSourceNode = {
+          id: `src:${g.itemId}:${inp.itemId}`,
+          type: 'bpSource',
+          position: { x: SRC_X, y: beltY + DEV / 2 - SOURCE_H / 2 },
+          width: SOURCE_W,
+          height: SOURCE_H,
+          data: {
+            itemName: itemLabel(inp.itemId, lang, data),
+            itemImage: data.items[inp.itemId]?.image ?? '',
+            flowText: `${formatRate(inp.totalFlow)}/min`,
+            beltMark: inp.belt.mark,
+            beltColor: color,
+            overBelt: inp.overBelt,
+            beltCount: inp.beltCount,
+            kind: inp.kind === 'supplied' ? 'supplied' : 'raw',
+          },
+        };
+        nodes.push(srcNode);
+        edges.push(
+          makeEdge(
+            `bpin:${g.itemId}:${inp.itemId}`,
+            srcNode.id,
+            'r',
+            firstTarget.id,
+            firstTarget.h,
+            { color, arrow: N < 2 },
+          ),
+        );
+      }
+
+      const tapLabel = `${formatRate(inp.perMachineFlow)}/min`;
+      // 分离器级联（i = 0..N-2）：抽一台 + 尾料续接下一台/最后一台。
+      for (let i = 0; i <= N - 2; i++) {
+        const devNode: BpDeviceNode = {
+          id: `s:${g.itemId}:${inp.itemId}:${i}`,
+          type: 'bpDevice',
+          position: { x: centerX(i) - DEV / 2, y: beltY },
+          width: DEV,
+          height: DEV,
+          data: { device: 'splitter', beltColor: color, branchText: tapLabel },
+        };
+        nodes.push(devNode);
+        // 抽一台：分离器 → 该台机器顶部。
+        edges.push(
+          makeEdge(
+            `stap:${g.itemId}:${inp.itemId}:${i}`,
+            devNode.id,
+            'b',
+            `m:${g.itemId}:${i}`,
+            't',
+            { color, label: tapLabel, arrow: true },
+          ),
+        );
+        // 尾料续接：非最后一个分离器 → 下一个分离器；最后一个 → 最后一台机器。
+        if (i < N - 2) {
+          edges.push(
+            makeEdge(
+              `scont:${g.itemId}:${inp.itemId}:${i}`,
+              devNode.id,
+              'r',
+              `s:${g.itemId}:${inp.itemId}:${i + 1}`,
+              'l',
+              { color },
+            ),
+          );
+        } else {
+          edges.push(
+            makeEdge(
+              `stail:${g.itemId}:${inp.itemId}`,
+              devNode.id,
+              'r',
+              `m:${g.itemId}:${N - 1}`,
+              't',
+              { color, label: tapLabel, arrow: true },
+            ),
+          );
+        }
+      }
+    });
+
+    // --- 输出 manifold：各台机器 → 合并器级联 → 输出端点 ---
+    const outNode: BpOutNode = {
+      id: `out:${g.itemId}`,
+      type: 'bpOut',
+      position: { x: GX + (N - 1) * MACHINE_DX + MACHINE_W + 52, y: outY + DEV / 2 - OUT_H / 2 },
+      width: OUT_W,
+      height: OUT_H,
+      data: {
+        itemName: itemLabel(g.itemId, lang, data),
+        itemImage: data.items[g.itemId]?.image ?? '',
+        flowText: `${formatRate(g.totalRate)}/min`,
+        beltMark: g.outputBelt.mark,
+        beltColor: beltColor(g.outputBelt.mark),
+        overBelt: g.outputOverBelt,
+        beltCount: g.outputBeltCount,
+        isProduct: g.isProduct,
+      },
+    };
+    nodes.push(outNode);
+
+    const outColor = beltColor(g.outputBelt.mark);
+    const perOut = `${formatRate(g.perMachineRate)}/min`;
+    if (N === 1) {
+      edges.push(
+        makeEdge(`oout:${g.itemId}`, `m:${g.itemId}:0`, 'b', outNode.id, 'l', {
+          color: outColor,
+          label: `${formatRate(g.totalRate)}/min`,
+          beltMark: g.outputBelt.mark,
+          overBelt: g.outputOverBelt,
+          beltCount: g.outputBeltCount,
+          arrow: true,
+        }),
+      );
+    } else {
+      for (let i = 1; i <= N - 1; i++) {
+        const devNode: BpDeviceNode = {
+          id: `g:${g.itemId}:${i}`,
+          type: 'bpDevice',
+          position: { x: centerX(i) - DEV / 2, y: outY },
+          width: DEV,
+          height: DEV,
+          data: { device: 'merger', beltColor: outColor, branchText: perOut },
+        };
+        nodes.push(devNode);
+        // 该台机器产物汇入其正下方合并器顶部。
+        edges.push(
+          makeEdge(`gin:${g.itemId}:${i}`, `m:${g.itemId}:${i}`, 'b', devNode.id, 't', {
+            color: outColor,
+            label: perOut,
+            arrow: true,
+          }),
+        );
+        if (i < N - 1) {
+          edges.push(
+            makeEdge(`gcont:${g.itemId}:${i}`, devNode.id, 'r', `g:${g.itemId}:${i + 1}`, 'l', {
+              color: outColor,
+            }),
+          );
+        } else {
+          edges.push(
+            makeEdge(`gout:${g.itemId}`, devNode.id, 'r', outNode.id, 'l', {
+              color: outColor,
+              label: `${formatRate(g.totalRate)}/min`,
+              beltMark: g.outputBelt.mark,
+              overBelt: g.outputOverBelt,
+              beltCount: g.outputBeltCount,
+              arrow: true,
+            }),
+          );
+        }
+      }
+      // 第一台机器产物从左侧汇入首个合并器主干。
+      edges.push(
+        makeEdge(`gfirst:${g.itemId}`, `m:${g.itemId}:0`, 'b', `g:${g.itemId}:1`, 'l', {
+          color: outColor,
+          label: perOut,
+        }),
+      );
+    }
+
+    y = outY + DEV + BAND_GAP;
+  }
+
+  return { nodes, edges, plan };
+}

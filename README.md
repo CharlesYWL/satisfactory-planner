@@ -10,6 +10,7 @@ Multica 项目: 「Better Satisfactory Planner」(MYW-43~48)
 - [x] M2 流程图渲染 (React Flow)
 - [x] M3 交互三 Tab + 替代配方智能筛选 + 超频
 - [x] M4 打磨（边图标/带速建议 · 瓶颈高亮 · 功耗分组 · tooltip）
+- [x] 改进4 施工图视图（展开机器阵列 + manifold 详细走线 · 可切换）
 - [ ] M5 部署（可选）
 
 ## 数据层 (data/)
@@ -58,6 +59,8 @@ npm run build    # 类型检查 + 生产构建
 | `trace.ts` | `traceProduction` 自顶向下展开生产树（正反向共用，含循环保护） |
 | `forward.ts` | `balanceForward` 正向配平（产线取向） |
 | `reverse.ts` | `balanceReverse` 反向配平（成品取向） |
+| `logistics.ts` | `computeLogistics` 物流估算（分离器/合并器数量 + 带级，先合再分主干模型） |
+| `blueprint.ts` | `computeBlueprint` 施工图计算（机器阵列展开 + manifold 线性级联，分/合 = N-1） |
 
 入口 `src/lib/index.ts` 统一导出。
 
@@ -208,3 +211,23 @@ i18next + react-i18next，**默认中文**，选项 Tab 顶部可一键切「中
 python3 data/build_zh_names.py            # 从 SCIM CDN 抓取 zh-Stable 并生成
 python3 data/build_zh_names.py zh.json    # 或用本地 zh-Stable.json
 ```
+
+## 改进4 · 施工图视图 (`src/lib/blueprint.ts` + `src/components/Blueprint*`)
+
+选项 Tab 顶部「**画布视图**」可在 **拓扑图 / 施工图** 间切换（默认拓扑图，二者并存互不影响）。
+
+- **拓扑图（原有）**：抽象「组对组」，机器折叠 `xN`、贝塞尔曲线，看全局配平——不改动。
+- **施工图（新）**：对标 B 站施工图，把每个机器组**展开成 N 台独立机器阵列**，按游戏最通用的
+  **manifold（歧管主干供料）** 给出「照着能搭」的走线：
+  - **机器阵列**：`x6 构造器` 渲染成 6 个独立机器节点并排（手工网格坐标，非 dagre）。
+  - **输入 manifold**：每种原料一条主干带，沿阵列走，每台机器前一个 **1→2 分离器(分)** 抽出该台的量，
+    尾料续接下一台，最后一台吃尾料 → N 台 = **N-1 个分离器**。
+  - **输出 manifold**：各台产物用 **2→1 合并器(合)** 级联汇成一条主干 → N 台 = **N-1 个合并器**。
+  - **直角走线**：边用 `smoothstep` + `borderRadius:0` → 纯 90° 折线，模拟地基对齐。
+  - **传送带分级**：沿用 Mk1~Mk6 冷→暖配色 + 左上图例；主干按整段流量定档，超单条最高档给并行带条数。
+  - **流量标注 + 底部对账**：入口/支路/产物流量标注，右下 HUD 给成品产出速率 + 机器/分/合总数 + 各带级用量。
+
+**分层**：纯计算 `blueprint.ts`（`computeBlueprint(tree, machineCountOf, rateOf)` → `BlueprintPlan`，可单测）与
+渲染分离——`blueprintFlow.ts` 把 plan 转成 React Flow 的 nodes/edges + 手工坐标，`blueprintNodes.tsx` /
+`blueprintEdges.tsx` 为自定义节点（机器/分合/源/输出端点）与直角边，`BlueprintGraph.tsx` 装配画布与 HUD。
+算法层（`src/lib/forward|reverse|trace`）与拓扑视图（`FlowGraph`）零改动。`npm test` 47/47 全绿。

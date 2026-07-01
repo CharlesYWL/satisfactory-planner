@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { gameData } from './lib';
 import FlowGraph from './components/FlowGraph';
+import BlueprintGraph from './components/BlueprintGraph';
 import SidePanel from './components/panel/SidePanel';
 import { usePlanner, usePlannerDerived } from './store/plannerStore';
 
@@ -17,11 +18,12 @@ export default function App() {
   const direction = usePlanner((s) => s.direction);
   const detail = usePlanner((s) => s.detail);
   const logistics = usePlanner((s) => s.logistics);
+  const viewMode = usePlanner((s) => s.viewMode);
   const derived = usePlannerDerived();
 
-  // 结构性变化（目标 / 取向 / 方向 / 详细物流）时 remount 以重新 fitView；
+  // 结构性变化（目标 / 取向 / 方向 / 详细物流 / 视图）时 remount 以重新 fitView；
   // 速率 / 配方 / 供给 / 详略变化则原地更新，平滑不抖动。
-  const graphKey = `${targetItemId}-${mode}-${direction}-${logistics ? 'logi' : 'plain'}`;
+  const graphKey = `${viewMode}-${targetItemId}-${mode}-${direction}-${logistics ? 'logi' : 'plain'}`;
 
   return (
     <div className="app">
@@ -34,14 +36,18 @@ export default function App() {
 
       <div className="app__split">
         <main className="app__canvas">
-          <FlowGraph
-            key={graphKey}
-            result={derived.graph}
-            data={gameData}
-            direction={direction}
-            detail={detail}
-            logistics={logistics}
-          />
+          {viewMode === 'blueprint' ? (
+            <BlueprintGraph key={graphKey} result={derived.graph} data={gameData} />
+          ) : (
+            <FlowGraph
+              key={graphKey}
+              result={derived.graph}
+              data={gameData}
+              direction={direction}
+              detail={detail}
+              logistics={logistics}
+            />
+          )}
         </main>
         <SidePanel />
       </div>

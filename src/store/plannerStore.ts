@@ -22,6 +22,8 @@ import type { DetailLevel } from '../components/nodes';
 export type PlannerMode = 'reverse' | 'forward';
 /** 图表布局方向。 */
 export type FlowDirection = 'LR' | 'TB';
+/** 画布视图：拓扑图（抽象组对组）/ 施工图（展开机器阵列 + manifold 走线）。 */
+export type ViewMode = 'topology' | 'blueprint';
 
 /** 全局规划状态（单一数据源，任意输入变化 → 实时重算重渲染）。 */
 export interface PlannerState {
@@ -45,6 +47,8 @@ export interface PlannerState {
   detail: DetailLevel;
   /** 详细物流：开 → 显示分离器/合并器节点 + 边按带级配色。 */
   logistics: boolean;
+  /** 画布视图：拓扑图 / 施工图。 */
+  viewMode: ViewMode;
 
   setTargetItemId: (itemId: string) => void;
   setMode: (mode: PlannerMode) => void;
@@ -58,6 +62,7 @@ export interface PlannerState {
   setDirection: (direction: FlowDirection) => void;
   setDetail: (detail: DetailLevel) => void;
   setLogistics: (on: boolean) => void;
+  setViewMode: (view: ViewMode) => void;
 }
 
 const DEFAULT_TARGET = 'Desc_Stator_C';
@@ -85,6 +90,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   direction: 'LR',
   detail: 'detailed',
   logistics: false,
+  viewMode: 'topology',
 
   setTargetItemId: (itemId) =>
     // 换目标 → 清空与旧产线绑定的配方覆盖；正向取向下用新产线的原矿需求重新播种供给。
@@ -137,6 +143,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   setDirection: (direction) => set({ direction }),
   setDetail: (detail) => set({ detail }),
   setLogistics: (on) => set({ logistics: on }),
+  setViewMode: (view) => set({ viewMode: view }),
 }));
 
 /** 派生产线结果：归一化 graph（图渲染）+ 可选 forward（供原料 Tab 显示瓶颈）。 */
