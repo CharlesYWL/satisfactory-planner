@@ -19,6 +19,7 @@ import { buildingName, itemName, useLang } from '../i18n';
 import { buildFlow, layoutFlow, beltColor, BELT_COLORS, type GraphResult } from './buildFlow';
 import { edgeTypes } from './edges';
 import { formatRate, nodeTypes, type AppFlowNode, type DetailLevel } from './nodes';
+import CollapsibleHud from './CollapsibleHud';
 
 export interface FlowGraphProps {
   /** 归一化产线结果（正向/反向均可）。 */
@@ -117,7 +118,7 @@ export default function FlowGraph({
       <MiniMap pannable zoomable nodeColor={miniMapColor} maskColor="rgba(20,22,26,0.7)" />
 
       <Panel position="top-left">
-        <div className="sf-hud">
+        <CollapsibleHud title={t('graph.targetLine')} chip="ℹ">
           <div className="sf-hud__label">{t('graph.targetLine')}</div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>
             {formatRate(result.targetRate)}/min · {targetName}
@@ -164,11 +165,11 @@ export default function FlowGraph({
               </div>
             </>
           ) : null}
-        </div>
+        </CollapsibleHud>
       </Panel>
 
       <Panel position="bottom-right">
-        <div className="sf-hud sf-hud--power">
+        <CollapsibleHud title={t('graph.totalPower')} chip="⚡" className="sf-hud--power">
           <div className="sf-hud__label">{t('graph.totalPower')}</div>
           <div className="sf-hud__power-value">
             {Math.round(result.totalPower)} <small>MW</small>
@@ -229,7 +230,7 @@ export default function FlowGraph({
               ))}
             </details>
           ) : null}
-        </div>
+        </CollapsibleHud>
       </Panel>
     </ReactFlow>
   );

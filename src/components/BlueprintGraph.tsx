@@ -22,6 +22,7 @@ import { buildBlueprint } from './blueprintFlow';
 import { blueprintNodeTypes, type BpFlowNode } from './blueprintNodes';
 import { blueprintEdgeTypes } from './blueprintEdges';
 import { formatRate } from './nodes';
+import CollapsibleHud from './CollapsibleHud';
 
 export interface BlueprintGraphProps {
   result: GraphResult;
@@ -82,7 +83,7 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
       <MiniMap pannable zoomable nodeColor={miniMapColor} maskColor="rgba(20,22,26,0.7)" />
 
       <Panel position="top-left">
-        <div className="sf-hud">
+        <CollapsibleHud title={t('graph.blueprintTitle')} chip="ℹ">
           <div className="sf-hud__label">{t('graph.blueprintTitle')}</div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>
             {formatRate(result.targetRate)}/min · {targetName}
@@ -113,11 +114,15 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
               {t('logistics.merger')}
             </div>
           </div>
-        </div>
+        </CollapsibleHud>
       </Panel>
 
       <Panel position="bottom-right">
-        <div className="sf-hud sf-hud--power">
+        <CollapsibleHud
+          title={t('graph.blueprintReconcile')}
+          chip="∑"
+          className="sf-hud--power"
+        >
           <div className="sf-hud__label">{t('graph.blueprintReconcile')}</div>
           <div className="sf-hud__power-value">
             {formatRate(plan.productRate)} <small>/min</small>
@@ -159,7 +164,7 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
               ))}
             </>
           ) : null}
-        </div>
+        </CollapsibleHud>
       </Panel>
     </ReactFlow>
   );
