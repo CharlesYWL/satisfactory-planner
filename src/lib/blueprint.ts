@@ -17,6 +17,7 @@
 
 import { BELTS, suggestBelt, type Belt } from './rates';
 import type { InputKind, TraceNode } from './trace';
+import { aggregateInputFlows } from './trace';
 import type { BeltUsage } from './logistics';
 
 /** 单条传送带最高吞吐（最高档带速）/min。 */
@@ -181,6 +182,11 @@ export function computeBlueprint(
   };
   collect(tree);
 
+  // 2.5) 输入流量必须取「该机器组对某物料的全组总流量」，而不是首个树节点那条支路的量。
+  // 同一中间产物被多个下游消费时树里会出现多个该物品节点，各只带一条支路的 rate；
+  // 聚合全树同 (目标, 输入) 的 inputs 才是真实总流量（详见 aggregateInputFlows）。
+  const inputFlowOf = aggregateInputFlows(tree);
+
   const groups: BlueprintGroup[] = [];
   let totalMachines = 0;
   let totalSplitters = 0;
@@ -208,14 +214,16 @@ export function computeBlueprint(
     const isProduct = itemId === tree.itemId;
 
     const inputs: BlueprintInput[] = node.inputs.map((input) => {
+      // 全组总流量（多消费者时聚合所有同名节点支路），回退单节点 rate。
+      const totalFlow = inputFlowOf(itemId, input.itemId) ?? input.rate;
       const splitters = manifoldNodes(machineCount);
-      const b = beltFor(input.rate);
+      const b = beltFor(totalFlow);
       addBelt(b.belt, b.beltCount);
       totalSplitters += splitters;
       return {
         itemId: input.itemId,
-        totalFlow: input.rate,
-        perMachineFlow: machineCount > 0 ? input.rate / machineCount : input.rate,
+        totalFlow,
+        perMachineFlow: machineCount > 0 ? totalFlow / machineCount : totalFlow,
         belt: b.belt,
         overBelt: b.overBelt,
         beltCount: b.beltCount,

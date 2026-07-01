@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Background,
@@ -23,6 +23,7 @@ import { blueprintNodeTypes, type BpFlowNode } from './blueprintNodes';
 import { blueprintEdgeTypes } from './blueprintEdges';
 import { formatRate } from './nodes';
 import CollapsibleHud from './CollapsibleHud';
+import ReflowButton from './ReflowButton';
 
 export interface BlueprintGraphProps {
   result: GraphResult;
@@ -54,6 +55,11 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
     setEdges(built.edges);
   }, [built, setNodes, setEdges]);
 
+  // 自动排版：把（被拖乱的）机器阵列恢复成 manifold 网格原始坐标，只改位置、不动边/数据。
+  const handleReflow = useCallback(() => {
+    setNodes(built.nodes.map((n) => ({ ...n })));
+  }, [built.nodes, setNodes]);
+
   const plan = built.plan;
   const targetName = itemName(result.itemId, lang, data);
   const usedBeltMarks = new Set(plan.beltUsage.map((u) => u.mark));
@@ -81,6 +87,8 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
       <Background variant={BackgroundVariant.Lines} gap={38} size={1} color="#2f333a" />
       <Controls showInteractive={false} />
       <MiniMap pannable zoomable nodeColor={miniMapColor} maskColor="rgba(20,22,26,0.7)" />
+
+      <ReflowButton onReflow={handleReflow} padding={0.14} />
 
       <Panel position="top-left">
         <CollapsibleHud title={t('graph.blueprintTitle')} chip="ℹ">

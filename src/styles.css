@@ -303,6 +303,47 @@ body {
   color: var(--sf-text-dim);
 }
 
+/* ---- Auto-reflow button (bottom-left, stacked above <Controls>) ---- */
+.react-flow__panel.sf-reflow-panel {
+  /* Controls 占据左下角 3×26px（约 78px）；把按钮顶到其正上方，避免重叠。 */
+  margin: 15px;
+  margin-bottom: 104px;
+}
+
+.sf-reflow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--sf-text);
+  background: rgba(28, 30, 34, 0.92);
+  border: 1px solid var(--sf-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.sf-reflow-btn svg {
+  color: var(--sf-orange);
+  flex: none;
+}
+
+.sf-reflow-btn:hover {
+  color: var(--sf-text);
+  background: rgba(255, 140, 0, 0.16);
+  border-color: var(--sf-orange);
+}
+
+.sf-reflow-btn:active {
+  transform: translateY(1px);
+}
+
 /* ---- M3 layout: graph (left) + side panel (right) ---- */
 .app__split {
   flex: 1;

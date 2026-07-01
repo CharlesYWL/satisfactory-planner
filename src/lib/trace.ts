@@ -54,6 +54,40 @@ const add = (bag: Record<string, number>, key: string, value: number) => {
   bag[key] = (bag[key] ?? 0) + value;
 };
 
+/** `aggregateInputFlows` 内部 (目标物品, 输入物料) → 总流量 的 Map key。 */
+const flowKey = (targetItemId: string, inputItemId: string) => `${targetItemId}\u0000${inputItemId}`;
+
+/**
+ * 聚合生产树里每个「输入物料 → 目标物品组」的真实总流量/min。
+ *
+ * 背景（Bug 修复）：同一个中间产物被多个下游配方消费时，`traceProduction` 生成的树里
+ * 会出现该物品的多个节点，每个节点只携带它那一条支路的 rate/inputs。若下游只读「首个
+ * 出现节点」的 `inputs[x].rate`（施工图 / 拓扑图 / 物流估算此前都是这么做的），就只拿到其中
+ * 一条小支路的量，导致输入侧每段流量标签整体偏小（如铜矿石显示 20 应为 120）。
+ *
+ * 本函数遍历全树（不去重），把所有出现节点的 `inputs` 按 (目标物品, 输入物料) 累加，
+ * 得到该机器组对该输入物料的组内总流量。等价于「组总产 × 配方该料用量比」，且与树的
+ * 多节点结构完全解耦，可作为三处视图（施工图 / 拓扑图 / 物流）统一的流量口径来源。
+ *
+ * @param tree 生产树根（正向/反向重跑后的树）。
+ * @returns `(targetItemId, inputItemId) => 总流量/min | undefined`（该 pair 不存在时 undefined，
+ *          调用方可回退到单节点 rate）。
+ */
+export function aggregateInputFlows(
+  tree: TraceNode | null,
+): (targetItemId: string, inputItemId: string) => number | undefined {
+  const flows = new Map<string, number>();
+  const walk = (node: TraceNode) => {
+    for (const input of node.inputs) {
+      const key = flowKey(node.itemId, input.itemId);
+      flows.set(key, (flows.get(key) ?? 0) + input.rate);
+    }
+    for (const child of node.children) walk(child);
+  };
+  if (tree) walk(tree);
+  return (targetItemId, inputItemId) => flows.get(flowKey(targetItemId, inputItemId));
+}
+
 /**
  * 自顶向下递归展开生产树。
  *

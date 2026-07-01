@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   manifoldNodes,
   computeBlueprint,
+  balanceForward,
   balanceReverse,
   traceProduction,
   machineCapacity,
@@ -11,10 +12,12 @@ import {
 const STATOR = 'Desc_Stator_C';
 const RIP = 'Desc_IronPlateReinforced_C';
 const STITCHED = 'Recipe_Alternate_ReinforcedIronPlate_2_C';
+const WIRING = 'Desc_SpaceElevatorPart_3_C'; // 自动路线 Automated Wiring
 const AUTOMATED_WIRING = 'Desc_SpaceElevatorPart_3_C';
 const WIRE = 'Desc_Wire_C';
 const CABLE = 'Desc_Cable_C';
 const COPPER_INGOT = 'Desc_CopperIngot_C';
+const ORE_COPPER = 'Desc_OreCopper_C';
 
 /** 用反向配平结果构造 machineCountOf / rateOf 查询器。 */
 function reverseLookups(itemId: string, rate: number, overrides = {}) {
@@ -25,6 +28,34 @@ function reverseLookups(itemId: string, rate: number, overrides = {}) {
     machineCountOf: (id: string) => byItem.get(id)?.machineCountInteger ?? 0,
     rateOf: (id: string) => byItem.get(id)?.rate,
   };
+}
+
+/** 正向配平（产线取向）→ 与 store 一致的 machineCountOf / rateOf + 实产量重跑的树。 */
+function forwardLookups(itemId: string, supplies: Record<string, number>) {
+  const forward = balanceForward(itemId, supplies, { mode: 'integer' });
+  const byItem = new Map(forward.nodes.map((n) => [n.itemId, n]));
+  const output = Number.isFinite(forward.targetOutput) ? forward.targetOutput : 0;
+  const trace = traceProduction(itemId, output, { supplies: new Set(Object.keys(supplies)) });
+  return {
+    forward,
+    tree: trace.root,
+    machineCountOf: (id: string) => byItem.get(id)?.machineCount ?? 0,
+    rateOf: (id: string) => byItem.get(id)?.demand,
+  };
+}
+
+/** 断言：每个组的每条输入 totalFlow == 组总产 × 配方该料用量比（Plan-A 不变式）。 */
+function expectFlowMatchesRecipeRatio(plan: ReturnType<typeof computeBlueprint>) {
+  for (const g of plan.groups) {
+    const recipe = gameData.recipes[g.recipeId];
+    const producedQty = recipe.produce[g.itemId] ?? 1;
+    for (const inp of g.inputs) {
+      const ratio = (recipe.ingredients[inp.itemId] ?? 0) / producedQty;
+      expect(inp.totalFlow).toBeCloseTo(g.totalRate * ratio, 6);
+      const expectedPerMachine = g.machineCount > 0 ? inp.totalFlow / g.machineCount : inp.totalFlow;
+      expect(inp.perMachineFlow).toBeCloseTo(expectedPerMachine, 6);
+    }
+  }
 }
 
 describe('manifoldNodes 线性级联分/合数量', () => {
@@ -125,6 +156,60 @@ describe('computeBlueprint 施工图计算', () => {
     // 带速升序。
     const speeds = plan.beltUsage.map((u) => u.speed);
     expect([...speeds].sort((a, b) => a - b)).toEqual(speeds);
+  });
+});
+
+describe('computeBlueprint 多消费者输入流量（Bug 修复：铜矿石 20→120）', () => {
+  it('正向 / 自动路线 / 铜矿石 120 / 有钢管：输入侧每段流量按全组总量而非单条支路', () => {
+    // 复现场景：目标=自动路线，铜矿石自定义 120，钢管作为已供给（充足）。
+    const { forward, tree, machineCountOf, rateOf } = forwardLookups(WIRING, {
+      [ORE_COPPER]: 120,
+      Desc_SteelPipe_C: 1000,
+    });
+    // forward 本身正确：产量 5，瓶颈是铜矿石。
+    expect(forward.targetOutput).toBeCloseTo(5, 6);
+    expect(forward.bottlenecks).toContain(ORE_COPPER);
+
+    const plan = computeBlueprint(tree, machineCountOf, rateOf);
+
+    const copperIngot = plan.groups.find((g) => g.itemId === COPPER_INGOT)!;
+    // 铜锭组：4 台冶炼站、总产 120（保持正确）。
+    expect(copperIngot.machineCount).toBe(4);
+    expect(copperIngot.totalRate).toBeCloseTo(120, 6);
+    const oreIn = copperIngot.inputs.find((i) => i.itemId === ORE_COPPER)!;
+    // 修复前：totalFlow=20 / perMachineFlow=5；修复后应为 120 / 30。
+    expect(oreIn.totalFlow).toBeCloseTo(120, 6);
+    expect(oreIn.perMachineFlow).toBeCloseTo(30, 6);
+
+    const wire = plan.groups.find((g) => g.itemId === WIRE)!;
+    // 线材组：8 台、总产 240（被电缆 + 定子两处消费）。
+    expect(wire.machineCount).toBe(8);
+    expect(wire.totalRate).toBeCloseTo(240, 6);
+    const ingotIn = wire.inputs.find((i) => i.itemId === COPPER_INGOT)!;
+    // 修复前：totalFlow=20 / perMachineFlow=2.5（截图里的 2.5）；修复后应为 120 / 15。
+    expect(ingotIn.totalFlow).toBeCloseTo(120, 6);
+    expect(ingotIn.perMachineFlow).toBeCloseTo(15, 6);
+
+    // 全组一致性：每条输入 = 组总产 × 配方用量比，每台 = 总流量 / 台数。
+    expectFlowMatchesRecipeRatio(plan);
+  });
+
+  it('反向 / 自动路线：多消费者中间产物的输入流量同样按全组聚合', () => {
+    const { r, machineCountOf, rateOf } = reverseLookups(WIRING, 10);
+    const plan = computeBlueprint(r.tree, machineCountOf, rateOf);
+
+    const wire = plan.groups.find((g) => g.itemId === WIRE)!;
+    // 线材被电缆 + 定子消费，总产 480；喂它的铜锭应为 480 × (1/2) = 240（非单条支路）。
+    expect(wire.totalRate).toBeCloseTo(480, 6);
+    const ingotIn = wire.inputs.find((i) => i.itemId === COPPER_INGOT)!;
+    expect(ingotIn.totalFlow).toBeCloseTo(240, 6);
+
+    const copperIngot = plan.groups.find((g) => g.itemId === COPPER_INGOT)!;
+    const oreIn = copperIngot.inputs.find((i) => i.itemId === ORE_COPPER)!;
+    expect(oreIn.totalFlow).toBeCloseTo(240, 6);
+
+    // 反向取向下同样满足全组一致性（验收：不破坏反向配平）。
+    expectFlowMatchesRecipeRatio(plan);
   });
 });
 

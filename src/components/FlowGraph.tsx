@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Background,
@@ -20,6 +20,7 @@ import { buildFlow, layoutFlow, beltColor, BELT_COLORS, type GraphResult } from 
 import { edgeTypes } from './edges';
 import { formatRate, nodeTypes, type AppFlowNode, type DetailLevel } from './nodes';
 import CollapsibleHud from './CollapsibleHud';
+import ReflowButton from './ReflowButton';
 
 export interface FlowGraphProps {
   /** 归一化产线结果（正向/反向均可）。 */
@@ -64,6 +65,11 @@ export default function FlowGraph({
     setNodes(layouted.nodes);
     setEdges(layouted.edges);
   }, [layouted, setNodes, setEdges]);
+
+  // 自动排版：把（被拖乱的）节点位置恢复成 dagre 自动布局，只改位置、不动边/数据。
+  const handleReflow = useCallback(() => {
+    setNodes(layouted.nodes.map((n) => ({ ...n })));
+  }, [layouted.nodes, setNodes]);
 
   const buildingRows = useMemo(
     () => {
@@ -116,6 +122,8 @@ export default function FlowGraph({
       <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#3a3e45" />
       <Controls showInteractive={false} />
       <MiniMap pannable zoomable nodeColor={miniMapColor} maskColor="rgba(20,22,26,0.7)" />
+
+      <ReflowButton onReflow={handleReflow} padding={0.18} />
 
       <Panel position="top-left">
         <CollapsibleHud title={t('graph.targetLine')} chip="ℹ">

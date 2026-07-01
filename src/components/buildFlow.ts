@@ -11,6 +11,7 @@ import type {
 import {
   gameData as defaultData,
   BELTS,
+  aggregateInputFlows,
   computeLogistics,
   machineCapacity,
   suggestBelt,
@@ -299,6 +300,9 @@ export function buildFlow(
   const connByEdge = new Map<string, LogisticsConnection>(
     logisticsSummary?.connections.map((c) => [`${c.itemId}->${c.targetItemId}`, c]) ?? [],
   );
+  // 边/资源需求的流量口径：同一物料被多个下游消费时，首个目标节点只带一条支路的 rate，
+  // 必须聚合全树同 (目标, 输入) 的流量才是真实总量（与施工图 / 物流估算保持一致）。
+  const inputFlowOf = aggregateInputFlows(result.tree);
 
   const walk = (node: TraceNode) => {
     if (visited.has(node.itemId)) return;
@@ -352,6 +356,8 @@ export function buildFlow(
 
     for (const input of node.inputs) {
       const conn = connByEdge.get(`${input.itemId}->${node.itemId}`);
+      // 该「输入物料 → 本组」的真实总流量（多消费者时聚合），回退单节点 rate。
+      const inputFlow = inputFlowOf(node.itemId, input.itemId) ?? input.rate;
       // 详细物流且该段确有分离器/合并器 → 在源与目标之间插入物流节点。
       if (logistics && conn && conn.splitters + conn.mergers > 0) {
         const logiId = `logi:${input.itemId}->${node.itemId}`;
@@ -374,7 +380,7 @@ export function buildFlow(
         nodes.push(logiNode);
         // 前段：源 → 物流节点（带物料标签 + 带级配色，不带箭头）。
         edges.push(
-          makeEdge(input.itemId, node.itemId, input.rate, data, lang, {
+          makeEdge(input.itemId, node.itemId, inputFlow, data, lang, {
             logistics: true,
             conn,
             targetNodeId: logiId,
@@ -385,11 +391,11 @@ export function buildFlow(
         edges.push(beltConnectorEdge(logiId, node.itemId, conn));
       } else {
         edges.push(
-          makeEdge(input.itemId, node.itemId, input.rate, data, lang, { logistics, conn }),
+          makeEdge(input.itemId, node.itemId, inputFlow, data, lang, { logistics, conn }),
         );
       }
       if (input.kind !== 'produced') {
-        resourceRate.set(input.itemId, (resourceRate.get(input.itemId) ?? 0) + input.rate);
+        resourceRate.set(input.itemId, (resourceRate.get(input.itemId) ?? 0) + inputFlow);
       }
     }
 

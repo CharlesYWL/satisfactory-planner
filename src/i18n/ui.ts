@@ -134,6 +134,8 @@ export const resources = {
         logisticsTitle: '物流汇总',
         beltUsage: '各带级用量',
         beltSegments: '段',
+        autoLayout: '自动排版',
+        autoLayoutHint: '一键恢复整齐的自动布局',
       },
       node: {
         machines: '台',
@@ -295,6 +297,8 @@ export const resources = {
         logisticsTitle: 'Logistics',
         beltUsage: 'Belt usage',
         beltSegments: 'seg',
+        autoLayout: 'Auto Layout',
+        autoLayoutHint: 'Reset to a tidy automatic layout',
       },
       node: {
         machines: '',
