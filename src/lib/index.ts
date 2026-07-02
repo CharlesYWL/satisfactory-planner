@@ -52,11 +52,14 @@ export type {
   ForwardNode,
   ForwardResult,
 } from './forward';
-export { balanceReverse } from './reverse';
+export { balanceReverse, balanceReverseMulti, summarizeMachines, MULTI_ROOT_ITEM_ID } from './reverse';
 export type {
   ReverseOptions,
   ReverseResult,
   ReverseMachineSummary,
+  ReverseTarget,
+  ReverseMultiResult,
+  MachineSummary,
 } from './reverse';
 export {
   SPLITTER_FANOUT,

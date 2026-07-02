@@ -143,6 +143,7 @@ export function buildBlueprint(
     result.tree,
     (id) => byItem.get(id)?.machineCountInteger ?? 0,
     (id) => byItem.get(id)?.rate,
+    { targetItemIds: result.targets.map((t) => t.itemId) },
   );
 
   const nodes: BpFlowNode[] = [];

@@ -94,7 +94,8 @@ export default function InputTab() {
   const supplies = usePlanner((s) => s.supplies);
   const setSupply = usePlanner((s) => s.setSupply);
   const removeSupply = usePlanner((s) => s.removeSupply);
-  const targetItemId = usePlanner((s) => s.targetItemId);
+  const targets = usePlanner((s) => s.targets);
+  const targetItemId = targets[0]?.itemId;
   const derived = usePlannerDerived();
   const chain = useChainStructure();
 

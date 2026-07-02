@@ -178,6 +178,7 @@ export function computeBlueprint(
   tree: TraceNode | null,
   machineCountOf: (itemId: string) => number,
   rateOf: (itemId: string) => number | undefined,
+  options: { targetItemIds?: readonly string[] } = {},
 ): BlueprintPlan {
   if (!tree) {
     return {
@@ -192,6 +193,12 @@ export function computeBlueprint(
     };
   }
 
+  // 目标集合：多目标时由调用方传入（图层的目标列表）；缺省回退单目标（树根）。
+  const targetIds =
+    options.targetItemIds && options.targetItemIds.length > 0
+      ? options.targetItemIds
+      : [tree.itemId];
+  const targetSet = new Set(targetIds);
   // 1) 计算每个物品距根的最长距离（上游更深 → depth 更大 → 画在更上方）。
   const depth = new Map<string, number>();
   const dfsDepth = (node: TraceNode, d: number) => {
@@ -239,7 +246,7 @@ export function computeBlueprint(
     if (machineCount <= 0) continue;
     const totalRate = rateOf(itemId) ?? node.rate;
     const perMachineRate = machineCount > 0 ? totalRate / machineCount : totalRate;
-    const isProduct = itemId === tree.itemId;
+    const isProduct = targetSet.has(itemId);
 
     const inputs: BlueprintInput[] = node.inputs.map((input) => {
       // 全组总流量（多消费者时聚合所有同名节点支路），回退单节点 rate。
@@ -336,8 +343,11 @@ export function computeBlueprint(
 
   return {
     groups,
-    productItemId: tree.itemId,
-    productRate: rateOf(tree.itemId) ?? tree.rate,
+    productItemId: targetIds[0] ?? tree.itemId,
+    productRate: targetIds.reduce(
+      (sum, id) => sum + (rateOf(id) ?? nodeOf.get(id)?.rate ?? 0),
+      0,
+    ),
     laneCount,
     totalMachines,
     totalSplitters,

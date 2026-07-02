@@ -842,6 +842,82 @@ body {
   font-size: 12px;
 }
 
+/* ---- Target list (reverse multi-target) ---- */
+.target-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.target-row .item-trigger {
+  flex: 1;
+  min-width: 0;
+}
+
+.target-row__rate {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.target-row__rate .panel__input--num {
+  width: 64px;
+}
+
+.target-row__remove {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--sf-text-dim);
+  background: var(--sf-bg-2);
+  border: 1px solid var(--sf-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.target-row__remove:hover:not(:disabled) {
+  border-color: var(--sf-orange);
+  color: var(--sf-text);
+  background: #31343a;
+}
+
+.target-row__remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.target-add {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sf-text);
+  background: var(--sf-bg-2);
+  border: 1px dashed var(--sf-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.target-add:hover {
+  border-color: var(--sf-orange);
+  background: #31343a;
+}
+
 /* ---- Item picker dialog (image grid) ---- */
 .item-dialog__backdrop {
   position: fixed;

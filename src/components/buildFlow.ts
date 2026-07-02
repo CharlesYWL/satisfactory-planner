@@ -6,11 +6,13 @@ import type {
   LogisticsConnection,
   LogisticsSummary,
   ReverseResult,
+  ReverseMultiResult,
   TraceNode,
 } from '../lib';
 import {
   gameData as defaultData,
   BELTS,
+  MULTI_ROOT_ITEM_ID,
   aggregateInputFlows,
   computeLogistics,
   machineCapacity,
@@ -78,9 +80,14 @@ export interface GraphResult {
   itemId: string;
   /** 配平取向：瓶颈/欠料高亮仅在 forward 下生效。 */
   mode: 'forward' | 'reverse';
-  /** HUD 标题用的产出速率/min（反向=目标产量；正向=实际产量）。 */
+  /** HUD 标题用的产出速率/min（反向=目标产量之和；正向=实际产量）。 */
   targetRate: number;
-  /** 生产树（用于连边与节点展开）。 */
+  /**
+   * 目标集合（反向可多目标，正向恒单目标）：图层据此判断哪些节点是「成品」高亮，
+   * HUD 据此逐目标显示「产量/min · 名称」。单目标时长度为 1。
+   */
+  targets: { itemId: string; rate: number }[];
+  /** 生产树（用于连边与节点展开）；多目标时为虚拟 super-root（见 MULTI_ROOT_ITEM_ID）。 */
   tree: TraceNode | null;
   /** 原矿/原料需求汇总。 */
   rawTotals: Record<string, number>;
@@ -110,6 +117,36 @@ export function reverseToGraph(result: ReverseResult): GraphResult {
     itemId: result.itemId,
     mode: 'reverse',
     targetRate: result.targetRate,
+    targets: [{ itemId: result.itemId, rate: result.targetRate }],
+    tree: result.tree,
+    rawTotals: result.rawTotals,
+    machines,
+    buildingTotals: result.buildingTotals,
+    totalPower: result.totalPower,
+  };
+}
+
+/** 反向多目标配平结果 → 归一化 GraphResult（共享中间产物已按 itemId 合并）。 */
+export function reverseMultiToGraph(result: ReverseMultiResult): GraphResult {
+  const machines: GraphMachine[] = result.machines.map((m) => ({
+    itemId: m.itemId,
+    recipeId: m.recipeId,
+    machineId: m.machineId,
+    rate: m.rate,
+    machineCount: m.machineCount,
+    machineCountInteger: m.machineCountInteger,
+    clockPct: 100,
+    utilization: m.machineCountInteger > 0 ? m.machineCount / m.machineCountInteger : 1,
+    power: m.power,
+    isBottleneck: false,
+  }));
+  const targetRate = result.targets.reduce((sum, t) => sum + t.rate, 0);
+  return {
+    // HUD 名称退化字段取首个目标；多目标标题实际逐目标渲染 `targets`。
+    itemId: result.targets[0]?.itemId ?? '',
+    mode: 'reverse',
+    targetRate,
+    targets: result.targets.map((t) => ({ itemId: t.itemId, rate: t.rate })),
     tree: result.tree,
     rawTotals: result.rawTotals,
     machines,
@@ -146,6 +183,7 @@ export function forwardToGraph(
     itemId: result.itemId,
     mode: 'forward',
     targetRate: result.targetOutput,
+    targets: [{ itemId: result.itemId, rate: result.targetOutput }],
     tree,
     rawTotals: result.rawInputs,
     machines,
@@ -303,8 +341,14 @@ export function buildFlow(
   // 边/资源需求的流量口径：同一物料被多个下游消费时，首个目标节点只带一条支路的 rate，
   // 必须聚合全树同 (目标, 输入) 的流量才是真实总量（与施工图 / 物流估算保持一致）。
   const inputFlowOf = aggregateInputFlows(result.tree);
+  const targetItemIds = new Set(result.targets.map((t) => t.itemId));
 
   const walk = (node: TraceNode) => {
+    // 多目标虚拟 super-root：本身不渲染，只透传到各目标子树。
+    if (node.itemId === MULTI_ROOT_ITEM_ID) {
+      for (const child of node.children) walk(child);
+      return;
+    }
     if (visited.has(node.itemId)) return;
     visited.add(node.itemId);
 
@@ -313,7 +357,7 @@ export function buildFlow(
     const summary = summaryByItem.get(node.itemId);
     const machineCount = summary?.machineCount ?? node.machineCount;
     const machineCountInteger = summary?.machineCountInteger ?? Math.ceil(machineCount - 1e-9);
-    const isTarget = node.itemId === result.itemId;
+    const isTarget = targetItemIds.has(node.itemId);
 
     const clockPct = summary?.clockPct ?? 100;
     const utilization =

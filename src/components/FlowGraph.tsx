@@ -94,7 +94,6 @@ export default function FlowGraph({
     [result.rawTotals, data, lang],
   );
 
-  const targetName = itemName(result.itemId, lang, data);
   const logisticsSummary = layouted.logisticsSummary;
   // 带级图例固定展示全 6 档梯度（让用户学会冷→暖配色），高亮当前用到的档位。
   const usedBeltMarks = new Set(logisticsSummary?.beltUsage.map((u) => u.mark) ?? []);
@@ -128,9 +127,11 @@ export default function FlowGraph({
       <Panel position="top-left">
         <CollapsibleHud title={t('graph.targetLine')} chip="ℹ">
           <div className="sf-hud__label">{t('graph.targetLine')}</div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>
-            {formatRate(result.targetRate)}/min · {targetName}
-          </div>
+          {result.targets.map((tg) => (
+            <div key={tg.itemId} style={{ fontSize: 15, fontWeight: 700 }}>
+              {formatRate(tg.rate)}/min · {itemName(tg.itemId, lang, data)}
+            </div>
+          ))}
           <div className="sf-legend" style={{ marginTop: 8 }}>
             <div className="sf-legend__item">
               <span className="sf-legend__dot" style={{ background: '#e5484d' }} />

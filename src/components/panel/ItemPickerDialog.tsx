@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { gameData } from '../../lib';
 import { itemName, useLang } from '../../i18n';
-import { usePlanner } from '../../store/plannerStore';
 
 /** 弹窗里展示的一个候选物品（仅取网格需要的字段）。 */
 interface PickItem {
@@ -61,14 +60,21 @@ function groupByCategory(items: PickItem[], sortName: (it: PickItem) => string):
 /**
  * 目标产品图片网格选择弹窗（对标 satisfactory-calculator 的「可供生产的物品」弹窗）。
  *
- * 替代原下拉框：顶部搜索（按显示名/英文名/ID 过滤，中英文皆可），物品按分类分组成带 header 的
- * 网格，每格大图标 + 名称（无数字）。点物品即写入 store.targetItemId 并关闭，主流程图实时重算。
+ * 纯受控组件：顶部搜索（按显示名/英文名/ID 过滤，中英文皆可），物品按分类分组成带 header 的
+ * 网格，每格大图标 + 名称（无数字）。点物品即回调 `onPick(id)` 并关闭——由调用方决定写哪个
+ * 目标（单目标换物品 / 多目标某行换物品 / 新增目标），故复用于产出 Tab 的所有取物品场景。
  */
-export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
+export default function ItemPickerDialog({
+  onClose,
+  onPick,
+  selectedId,
+}: {
+  onClose: () => void;
+  onPick: (itemId: string) => void;
+  selectedId?: string;
+}) {
   const { t } = useTranslation();
   const lang = useLang();
-  const targetItemId = usePlanner((s) => s.targetItemId);
-  const setTargetItemId = usePlanner((s) => s.setTargetItemId);
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -101,7 +107,7 @@ export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
   );
 
   const choose = (id: string) => {
-    setTargetItemId(id);
+    onPick(id);
     onClose();
   };
 
@@ -153,7 +159,7 @@ export default function ItemPickerDialog({ onClose }: { onClose: () => void }) {
                       <button
                         key={it.id}
                         type="button"
-                        className={`item-card ${it.id === targetItemId ? 'item-card--active' : ''}`}
+                        className={`item-card ${it.id === selectedId ? 'item-card--active' : ''}`}
                         onClick={() => choose(it.id)}
                         title={name}
                       >
