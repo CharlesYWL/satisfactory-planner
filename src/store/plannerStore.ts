@@ -232,7 +232,12 @@ function computePlanner(input: {
 
   if (mode === 'reverse') {
     // 反向多目标：共享中间产物按 itemId 合并，机器数/原矿跨目标累加。
-    const reverse = balanceReverseMulti(targets, { recipeOverrides });
+    // supplies 的 keys 作为「已有半成品」边界集：勾选的中间产物在此截断，
+    // 移出自产机器、上游原矿相应减少，计入 reverse.suppliedTotals。
+    const reverse = balanceReverseMulti(targets, {
+      recipeOverrides,
+      supplies: new Set(Object.keys(supplies)),
+    });
     return { graph: reverseMultiToGraph(reverse), forward: null, reverse };
   }
 
@@ -310,4 +315,25 @@ export function useChainStructure(): ReverseResult {
     () => balanceReverse(primaryItemId, 1, { recipeOverrides }),
     [primaryItemId, recipeOverrides],
   );
+}
+
+/**
+ * 反向多目标下可作为「已有半成品」边界的中间产物全集：各目标生产链中间产物的并集，
+ * 去掉目标本身。**刻意不传 supplies**，枚举完整结构 —— 勾选某物为边界后它仍留在列表里，
+ * 才能再取消勾选（对标正向 {@link useChainStructure} 的用法）。
+ */
+export function useReverseIntermediates(): string[] {
+  const targets = usePlanner((s) => s.targets);
+  const recipeOverrides = usePlanner((s) => s.recipeOverrides);
+  return useMemo(() => {
+    const targetIds = new Set(targets.map((t) => t.itemId));
+    const ids = new Set<string>();
+    for (const t of targets) {
+      const res = balanceReverse(t.itemId, 1, { recipeOverrides });
+      for (const m of res.machines) {
+        if (!targetIds.has(m.itemId)) ids.add(m.itemId);
+      }
+    }
+    return [...ids];
+  }, [targets, recipeOverrides]);
 }

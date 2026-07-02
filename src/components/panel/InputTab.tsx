@@ -6,6 +6,7 @@ import {
   usePlanner,
   usePlannerDerived,
   useChainStructure,
+  useReverseIntermediates,
 } from '../../store/plannerStore';
 import { formatRate } from '../nodes';
 
@@ -98,12 +99,15 @@ export default function InputTab() {
   const targetItemId = targets[0]?.itemId;
   const derived = usePlannerDerived();
   const chain = useChainStructure();
+  const reverseIntermediates = useReverseIntermediates();
 
   const byName = (l: Lang) => (a: string, b: string) =>
     itemName(a, l).localeCompare(itemName(b, l));
 
   if (mode === 'reverse') {
     const rows = Object.entries(derived.reverse?.rawTotals ?? {}).sort((a, b) => b[1] - a[1]);
+    const suppliedTotals = derived.reverse?.suppliedTotals ?? {};
+    const intermediates = [...reverseIntermediates].sort(byName(lang));
     return (
       <div className="panel__tab">
         <section className="panel__section">
@@ -123,6 +127,40 @@ export default function InputTab() {
                 </div>
               </div>
             ))
+          )}
+        </section>
+
+        <section className="panel__section">
+          <h3 className="panel__section-title">{t('input.boundaryTitle')}</h3>
+          <p className="panel__hint">{t('input.boundaryHint')}</p>
+          {intermediates.length === 0 ? (
+            <p className="panel__hint">{t('input.boundaryNone')}</p>
+          ) : (
+            intermediates.map((id) => {
+              const supplied = Object.prototype.hasOwnProperty.call(supplies, id);
+              const rate = suppliedTotals[id];
+              return (
+                <div className="boundary" key={id}>
+                  <label className="boundary__toggle">
+                    <input
+                      type="checkbox"
+                      checked={supplied}
+                      onChange={(e) => {
+                        // 反向只看 key 是否存在，速率值不参与配平（此处占位 1）。
+                        if (e.target.checked) setSupply(id, 1);
+                        else removeSupply(id);
+                      }}
+                    />
+                    {t('input.boundaryAsHave', { name: itemName(id, lang) })}
+                  </label>
+                  {supplied && rate ? (
+                    <div className="boundary__supplied">
+                      {t('input.boundarySupplied', { rate: formatRate(rate) })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
           )}
         </section>
       </div>

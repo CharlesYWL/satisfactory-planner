@@ -578,6 +578,53 @@ body {
   color: var(--sf-text);
 }
 
+.recipe-picker__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recipe-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--sf-border);
+  border-radius: 8px;
+  background: var(--sf-bg-2);
+  cursor: pointer;
+}
+
+.recipe-card--selected {
+  border-color: var(--sf-orange);
+  box-shadow: 0 0 0 1px var(--sf-orange) inset;
+}
+
+.recipe-card__radio {
+  margin-top: 2px;
+  accent-color: var(--sf-orange);
+  flex: none;
+}
+
+.recipe-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recipe-card__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sf-text);
+}
+
+.recipe-card__io {
+  font-size: 11px;
+  color: var(--sf-text-dim);
+  line-height: 1.4;
+}
+
 /* supply rows */
 .supply-row {
   padding: 10px;
@@ -659,6 +706,13 @@ body {
 
 .boundary__toggle input {
   accent-color: var(--sf-orange);
+}
+
+.boundary__supplied {
+  margin-top: 4px;
+  margin-left: 24px;
+  font-size: 11px;
+  color: var(--sf-orange);
 }
 
 /* ---- M4 polish: bottleneck / starvation highlight ---- */
