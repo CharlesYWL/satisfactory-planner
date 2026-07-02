@@ -12,15 +12,20 @@
  */
 
 import { MAX_CLOCK, MIN_CLOCK, gameData, type RecipeOverrides } from '../lib';
-import type { PlannerMode, FlowDirection, ViewMode, PlannerState } from './plannerStore';
+import type {
+  PlannerMode,
+  FlowDirection,
+  ViewMode,
+  PlannerState,
+  PlannerTarget,
+} from './plannerStore';
 import type { DetailLevel } from '../components/nodes';
 import type { Lang } from '../i18n/names';
 
 /** 参与 URL 序列化的 store 输入子集（不含 setter 与派生视图）。 */
 export interface SerializablePlannerState {
-  targetItemId: string;
+  targets: PlannerTarget[];
   mode: PlannerMode;
-  targetRate: number;
   supplies: Record<string, number>;
   recipeOverrides: RecipeOverrides;
   overclockEnabled: boolean;
@@ -33,9 +38,8 @@ export interface SerializablePlannerState {
 
 /** 各字段默认值——必须与 plannerStore 的初始 state 保持一致。 */
 export const URL_STATE_DEFAULTS: SerializablePlannerState = {
-  targetItemId: 'Desc_Stator_C',
+  targets: [{ itemId: 'Desc_Stator_C', rate: 5 }],
   mode: 'reverse',
-  targetRate: 5,
   supplies: {},
   recipeOverrides: {},
   overclockEnabled: false,
@@ -51,13 +55,14 @@ export const DEFAULT_LANG: Lang = 'zh';
 
 const SUPPLY_PREFIX = 's.';
 const RECIPE_PREFIX = 'r.';
+/** 多目标 URL key：`targets=Desc_Motor_C:10,Desc_Stator_C:5`。 */
+const TARGETS_KEY = 'targets';
 
 /** 从完整 store state 中摘出可序列化的输入子集。 */
 export function pickSerializable(state: PlannerState): SerializablePlannerState {
   return {
-    targetItemId: state.targetItemId,
+    targets: state.targets,
     mode: state.mode,
-    targetRate: state.targetRate,
     supplies: state.supplies,
     recipeOverrides: state.recipeOverrides,
     overclockEnabled: state.overclockEnabled,
@@ -93,6 +98,41 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
 
+/** 目标列表 → `Item:rate,Item:rate`（rate 用干净整数串）。 */
+function encodeTargets(targets: PlannerTarget[]): string {
+  return targets.map((t) => `${t.itemId}:${numStr(t.rate)}`).join(',');
+}
+
+/** 两个目标列表是否逐项相等（顺序敏感）——决定是否要写进 URL。 */
+function targetsEqual(a: PlannerTarget[], b: PlannerTarget[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((t, i) => t.itemId === b[i].itemId && t.rate === b[i].rate);
+}
+
+/**
+ * 解析 `targets=` 值：逐项 `itemId:rate`，校验 itemId 已知、rate 钳制 ≥1 整数，
+ * 非法项丢弃，重复 itemId 合并（rate 相加）。全部非法 → 返回空数组（调用方回退默认）。
+ */
+function parseTargets(raw: string): PlannerTarget[] {
+  const order: string[] = [];
+  const rateById = new Map<string, number>();
+  for (const entry of raw.split(',')) {
+    const idx = entry.lastIndexOf(':');
+    if (idx <= 0) continue;
+    const itemId = entry.slice(0, idx);
+    if (!isKnownItem(itemId)) continue;
+    const n = Number.parseInt(entry.slice(idx + 1), 10);
+    if (!Number.isFinite(n)) continue;
+    const rate = Math.max(1, n);
+    if (rateById.has(itemId)) rateById.set(itemId, rateById.get(itemId)! + rate);
+    else {
+      order.push(itemId);
+      rateById.set(itemId, rate);
+    }
+  }
+  return order.map((itemId) => ({ itemId, rate: rateById.get(itemId)! }));
+}
+
 /**
  * 把状态编码为 URLSearchParams：只写入与默认值不同的字段；
  * map 字段展开成多个 `s.*` / `r.*` 参数；lang 非默认时写入 `lang`。
@@ -104,9 +144,11 @@ export function encodeStateToParams(
   const params = new URLSearchParams();
   const d = URL_STATE_DEFAULTS;
 
-  if (state.targetItemId !== d.targetItemId) params.set('target', state.targetItemId);
+  // 多目标或目标 ≠ 默认 → 写 `targets`；单目标且 = 默认 → 省略。
+  if (!targetsEqual(state.targets, d.targets)) {
+    params.set(TARGETS_KEY, encodeTargets(state.targets));
+  }
   if (state.mode !== d.mode) params.set('mode', state.mode);
-  if (state.targetRate !== d.targetRate) params.set('rate', numStr(state.targetRate));
   if (state.overclockEnabled !== d.overclockEnabled) {
     params.set('over', state.overclockEnabled ? '1' : '0');
   }
@@ -138,18 +180,30 @@ export function decodeParamsToState(
   params: URLSearchParams,
 ): Partial<SerializablePlannerState> {
   const out: Partial<SerializablePlannerState> = {};
+  const d = URL_STATE_DEFAULTS;
 
-  const target = params.get('target');
-  if (target && isKnownItem(target)) out.targetItemId = target;
+  const targetsRaw = params.get(TARGETS_KEY);
+  if (targetsRaw != null) {
+    const parsed = parseTargets(targetsRaw);
+    if (parsed.length > 0) out.targets = parsed;
+  } else {
+    // 向后兼容旧单目标 URL（MYW-59 格式）：`target` + `rate` → 单元素 targets 数组。
+    const target = params.get('target');
+    const rateRaw = params.get('rate');
+    let itemId: string | undefined;
+    if (target != null && isKnownItem(target)) itemId = target;
+    let rate: number | undefined;
+    if (rateRaw != null) {
+      const n = Number.parseInt(rateRaw, 10);
+      if (Number.isFinite(n)) rate = Math.max(1, n);
+    }
+    if (itemId != null || rate != null) {
+      out.targets = [{ itemId: itemId ?? d.targets[0].itemId, rate: rate ?? d.targets[0].rate }];
+    }
+  }
 
   const mode = params.get('mode');
   if (mode === 'reverse' || mode === 'forward') out.mode = mode;
-
-  const rate = params.get('rate');
-  if (rate != null) {
-    const n = Number.parseInt(rate, 10);
-    if (Number.isFinite(n)) out.targetRate = Math.max(1, n);
-  }
 
   const supplies: Record<string, number> = {};
   let hasSupply = false;

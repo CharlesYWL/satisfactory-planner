@@ -9,6 +9,7 @@ import {
 
 // 真实存在于 data.normalized.json 的 id（供校验通过）
 const STATOR = 'Desc_Stator_C';
+const MOTOR = 'Desc_Motor_C';
 const SCREW = 'Desc_IronScrew_C';
 const ORE_IRON = 'Desc_OreIron_C';
 const ORE_COPPER = 'Desc_OreCopper_C';
@@ -18,9 +19,8 @@ const ALT_STATOR = 'Recipe_Alternate_Stator_C';
 /** 造一个「全部与默认不同」的状态，用于往返测试。 */
 function nonDefaultState(): SerializablePlannerState {
   return {
-    targetItemId: SCREW,
+    targets: [{ itemId: SCREW, rate: 42 }],
     mode: 'forward',
-    targetRate: 42,
     supplies: { [ORE_IRON]: 120, [ORE_COPPER]: 60 },
     recipeOverrides: { [SCREW]: ALT_SCREW, [STATOR]: ALT_STATOR },
     overclockEnabled: true,
@@ -47,12 +47,13 @@ describe('urlState 编解码', () => {
   it('等于默认的字段被省略，只保留差异', () => {
     const state: SerializablePlannerState = {
       ...URL_STATE_DEFAULTS,
-      targetItemId: SCREW,
-      targetRate: 10,
+      targets: [{ itemId: SCREW, rate: 10 }],
     };
     const params = encodeStateToParams(state, 'zh');
-    expect(params.get('target')).toBe(SCREW);
-    expect(params.get('rate')).toBe('10');
+    expect(params.get('targets')).toBe(`${SCREW}:10`);
+    // 不再写旧单目标 key
+    expect(params.has('target')).toBe(false);
+    expect(params.has('rate')).toBe(false);
     // 其余默认字段不写入
     expect(params.has('mode')).toBe(false);
     expect(params.has('over')).toBe(false);
@@ -64,9 +65,81 @@ describe('urlState 编解码', () => {
     expect(params.has('lang')).toBe(false);
     // decode 只返回差异字段
     expect(decodeParamsToState(params)).toEqual({
-      targetItemId: SCREW,
-      targetRate: 10,
+      targets: [{ itemId: SCREW, rate: 10 }],
     });
+  });
+
+  it('默认单目标（=默认）不写进 URL', () => {
+    const params = encodeStateToParams(
+      { ...URL_STATE_DEFAULTS, targets: [{ itemId: STATOR, rate: 5 }] },
+      'zh',
+    );
+    expect(params.has('targets')).toBe(false);
+  });
+
+  it('多目标 targets round-trip 幂等（逗号分隔 itemId:rate）', () => {
+    const state: SerializablePlannerState = {
+      ...URL_STATE_DEFAULTS,
+      targets: [
+        { itemId: MOTOR, rate: 10 },
+        { itemId: STATOR, rate: 5 },
+      ],
+    };
+    const params = encodeStateToParams(state, 'zh');
+    expect(params.get('targets')).toBe(`${MOTOR}:10,${STATOR}:5`);
+    expect(decodeParamsToState(params)).toEqual({
+      targets: [
+        { itemId: MOTOR, rate: 10 },
+        { itemId: STATOR, rate: 5 },
+      ],
+    });
+  });
+
+  it('向后兼容旧单目标 URL（target + rate → 单元素 targets）', () => {
+    const params = new URLSearchParams();
+    params.set('target', MOTOR);
+    params.set('rate', '12');
+    expect(decodeParamsToState(params)).toEqual({
+      targets: [{ itemId: MOTOR, rate: 12 }],
+    });
+  });
+
+  it('向后兼容：只有旧 rate（默认目标）→ 默认目标 + 该产量', () => {
+    const decoded = decodeParamsToState(new URLSearchParams('rate=10'));
+    expect(decoded.targets).toEqual([{ itemId: STATOR, rate: 10 }]);
+  });
+
+  it('向后兼容：旧 rate 钳制 ≥1、非数字丢弃', () => {
+    expect(decodeParamsToState(new URLSearchParams('rate=0')).targets).toEqual([
+      { itemId: STATOR, rate: 1 },
+    ]);
+    expect(decodeParamsToState(new URLSearchParams('rate=-5')).targets).toEqual([
+      { itemId: STATOR, rate: 1 },
+    ]);
+    // 非数字：rate 丢弃且无 target → 不返回 targets
+    expect(decodeParamsToState(new URLSearchParams('rate=abc')).targets).toBeUndefined();
+  });
+
+  it('targets 里非法/未知 itemId 丢弃；rate 钳制 ≥1 整数', () => {
+    const params = new URLSearchParams();
+    params.set('targets', `Desc_NotAnItem_C:5,${MOTOR}:0,${STATOR}:7`);
+    // 未知项丢弃；MOTOR rate 0 → 1；STATOR 7
+    expect(decodeParamsToState(params).targets).toEqual([
+      { itemId: MOTOR, rate: 1 },
+      { itemId: STATOR, rate: 7 },
+    ]);
+  });
+
+  it('targets 全非法 → 不返回 targets（回退默认单目标）', () => {
+    const params = new URLSearchParams();
+    params.set('targets', 'Desc_NotAnItem_C:5,also-bad');
+    expect(decodeParamsToState(params).targets).toBeUndefined();
+  });
+
+  it('targets 重复 itemId 合并（rate 相加）', () => {
+    const params = new URLSearchParams();
+    params.set('targets', `${MOTOR}:3,${MOTOR}:4`);
+    expect(decodeParamsToState(params).targets).toEqual([{ itemId: MOTOR, rate: 7 }]);
   });
 
   it('supplies / recipeOverrides map 正确往返（多项）', () => {
@@ -83,14 +156,6 @@ describe('urlState 编解码', () => {
     const decoded = decodeParamsToState(params);
     expect(decoded.supplies).toEqual({ [ORE_IRON]: 120, [ORE_COPPER]: 60 });
     expect(decoded.recipeOverrides).toEqual({ [SCREW]: ALT_SCREW });
-  });
-
-  it('rate 钳制到 ≥1 且取整', () => {
-    expect(decodeParamsToState(new URLSearchParams('rate=0')).targetRate).toBe(1);
-    expect(decodeParamsToState(new URLSearchParams('rate=-5')).targetRate).toBe(1);
-    expect(decodeParamsToState(new URLSearchParams('rate=7')).targetRate).toBe(7);
-    // 非数字丢弃回退默认（不返回该字段）
-    expect(decodeParamsToState(new URLSearchParams('rate=abc')).targetRate).toBeUndefined();
   });
 
   it('clock 钳制到 [1, 2.5]', () => {
@@ -113,7 +178,7 @@ describe('urlState 编解码', () => {
     params.append(`s.${ORE_IRON}`, 'not-a-number');
     params.append(`r.${STATOR}`, 'Recipe_NotReal_C');
     params.append('r.Desc_NotAnItem_C', ALT_SCREW);
-    // 所有字段非法 → 空覆盖
+    // 所有字段非法 → 空覆盖（无效 target 无 rate → 不产生 targets）
     expect(decodeParamsToState(params)).toEqual({});
   });
 

@@ -62,7 +62,6 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
 
   const plan = built.plan;
   const maxBeltSpeed = BELTS[BELTS.length - 1].speed;
-  const targetName = itemName(result.itemId, lang, data);
   const usedBeltMarks = new Set(plan.beltUsage.map((u) => u.mark));
   const beltLegend = Object.keys(BELT_COLORS).map((mark) => ({
     mark,
@@ -94,9 +93,11 @@ export default function BlueprintGraph({ result, data = defaultData }: Blueprint
       <Panel position="top-left">
         <CollapsibleHud title={t('graph.blueprintTitle')} chip="ℹ">
           <div className="sf-hud__label">{t('graph.blueprintTitle')}</div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>
-            {formatRate(result.targetRate)}/min · {targetName}
-          </div>
+          {result.targets.map((tg) => (
+            <div key={tg.itemId} style={{ fontSize: 15, fontWeight: 700 }}>
+              {formatRate(tg.rate)}/min · {itemName(tg.itemId, lang, data)}
+            </div>
+          ))}
           <p className="sf-hud__note">{t('graph.blueprintNote')}</p>
 
           <div className="sf-hud__label" style={{ marginTop: 10 }}>

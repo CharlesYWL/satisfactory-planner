@@ -14,16 +14,17 @@ import { usePlanner, usePlannerDerived } from './store/plannerStore';
 export default function App() {
   const { t } = useTranslation();
   const mode = usePlanner((s) => s.mode);
-  const targetItemId = usePlanner((s) => s.targetItemId);
+  const targets = usePlanner((s) => s.targets);
   const direction = usePlanner((s) => s.direction);
   const detail = usePlanner((s) => s.detail);
   const logistics = usePlanner((s) => s.logistics);
   const viewMode = usePlanner((s) => s.viewMode);
   const derived = usePlannerDerived();
 
-  // 结构性变化（目标 / 取向 / 方向 / 详细物流 / 视图）时 remount 以重新 fitView；
+  // 结构性变化（目标集合 / 取向 / 方向 / 详细物流 / 视图）时 remount 以重新 fitView；
   // 速率 / 配方 / 供给 / 详略变化则原地更新，平滑不抖动。
-  const graphKey = `${viewMode}-${targetItemId}-${mode}-${direction}-${logistics ? 'logi' : 'plain'}`;
+  const targetsKey = targets.map((tg) => tg.itemId).join(',');
+  const graphKey = `${viewMode}-${targetsKey}-${mode}-${direction}-${logistics ? 'logi' : 'plain'}`;
 
   return (
     <div className="app">
