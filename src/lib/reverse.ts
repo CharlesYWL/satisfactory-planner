@@ -10,6 +10,12 @@ export interface ReverseOptions {
   recipeId?: string;
   /** 中间产物的配方覆盖。 */
   recipeOverrides?: RecipeOverrides;
+  /**
+   * 边界供给物品集合：命中即视为「外部已供给的半成品」，链在此截断不再向下展开，
+   * 其上游原矿需求相应移除，该物品计入 {@link ReverseResult.suppliedTotals}。
+   * 反向只关心「是否截断」，不关心供给量大小，故只用集合。
+   */
+  supplies?: Set<string>;
   data?: GameData;
 }
 
@@ -38,6 +44,8 @@ export interface ReverseResult {
   tree: TraceNode | null;
   /** 原矿需求汇总：itemId → 所需原矿/min。 */
   rawTotals: Record<string, number>;
+  /** 被当作「已有」的中间产物汇总：itemId → 需外部提供的量/min（勾选边界时非空）。 */
+  suppliedTotals: Record<string, number>;
   /** 各自产物品的机器汇总（按物品聚合）。 */
   machines: ReverseMachineSummary[];
   /** 建筑 → 整数台数合计。 */
@@ -119,6 +127,7 @@ export function balanceReverse(
   const trace = traceProduction(itemId, targetRate, {
     recipeId: options.recipeId,
     recipeOverrides: options.recipeOverrides,
+    supplies: options.supplies,
     data,
   });
 
@@ -133,6 +142,7 @@ export function balanceReverse(
     targetRate,
     tree: trace.root,
     rawTotals: trace.rawTotals,
+    suppliedTotals: trace.suppliedTotals,
     machines,
     buildingTotals,
     totalPower,
@@ -181,6 +191,8 @@ export interface ReverseMultiResult {
   tree: TraceNode | null;
   /** 原矿需求汇总（跨目标累加）。 */
   rawTotals: Record<string, number>;
+  /** 被当作「已有」的中间产物汇总（跨目标累加）：itemId → 需外部提供的量/min。 */
+  suppliedTotals: Record<string, number>;
   /** 各自产物品的机器汇总（按合并后总产量重算，跨目标累加）。 */
   machines: ReverseMachineSummary[];
   /** 建筑 → 整数台数合计（跨目标累加）。 */
@@ -224,11 +236,13 @@ export function balanceReverseMulti(
   const produced: Record<string, number> = {};
   const recipeOf: Record<string, string> = {};
   const rawTotals: Record<string, number> = {};
+  const suppliedTotals: Record<string, number> = {};
   const roots: TraceNode[] = [];
 
   for (const target of norm) {
     const trace = traceProduction(target.itemId, target.rate, {
       recipeOverrides: options.recipeOverrides,
+      supplies: options.supplies,
       data,
     });
     for (const [id, rate] of Object.entries(trace.produced)) {
@@ -239,6 +253,9 @@ export function balanceReverseMulti(
     }
     for (const [id, rate] of Object.entries(trace.rawTotals)) {
       rawTotals[id] = (rawTotals[id] ?? 0) + rate;
+    }
+    for (const [id, rate] of Object.entries(trace.suppliedTotals)) {
+      suppliedTotals[id] = (suppliedTotals[id] ?? 0) + rate;
     }
     if (trace.root) roots.push(trace.root);
   }
@@ -255,6 +272,7 @@ export function balanceReverseMulti(
     targets: norm,
     tree,
     rawTotals,
+    suppliedTotals,
     machines,
     buildingTotals,
     totalPower,

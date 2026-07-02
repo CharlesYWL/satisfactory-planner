@@ -53,6 +53,7 @@ export const resources = {
         boundaryHint: '勾选后把该中间产物当作输入边界——算法展开到它就停。',
         boundaryNone: '当前产线没有可作边界的中间产物。',
         boundaryAsHave: '当作已有：{{name}}',
+        boundarySupplied: '需外部提供 {{rate}}/min',
         remove: '移除',
         custom: '自定义…',
         usage: '消耗 {{consumed}} · 剩余 {{leftover}}',
@@ -125,6 +126,10 @@ export const resources = {
       },
       recipe: {
         none: '当前产线没有可替换配方的中间产物。',
+        detailArrow: '→',
+        detailInputSep: ' + ',
+        detailNoInput: '无原料',
+        detailByproduct: '副产 {{items}}',
       },
       graph: {
         targetLine: '目标产线',
@@ -224,6 +229,7 @@ export const resources = {
         boundaryHint: 'Check to treat this intermediate as an input boundary — the tree stops there.',
         boundaryNone: 'No intermediate in the current line can be used as a boundary.',
         boundaryAsHave: 'Treat as on-hand: {{name}}',
+        boundarySupplied: 'Supply externally {{rate}}/min',
         remove: 'Remove',
         custom: 'Custom…',
         usage: 'Used {{consumed}} · Left {{leftover}}',
@@ -300,6 +306,10 @@ export const resources = {
       },
       recipe: {
         none: 'No intermediate in the current line has an alternate recipe.',
+        detailArrow: '→',
+        detailInputSep: ' + ',
+        detailNoInput: 'no inputs',
+        detailByproduct: '+ {{items}}',
       },
       graph: {
         targetLine: 'Target line',

@@ -23,10 +23,11 @@ export {
   primaryProduct,
   outputPerMin,
   inputPerMin,
+  recipeIO,
   machineCapacity,
   overclockPower,
 } from './rates';
-export type { Belt } from './rates';
+export type { Belt, RecipeIO, RecipeIOEntry } from './rates';
 export {
   chooseRecipe,
   getRelevantRecipes,
